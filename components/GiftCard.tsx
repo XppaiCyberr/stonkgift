@@ -12,6 +12,7 @@ import { formatUnits } from "viem";
 import { STONK_GIFT_ABI } from "@/lib/abi";
 import { getStonkGiftAddress } from "@/lib/contract";
 import { SUPPORTED_STOCKS } from "@/lib/tokens";
+import { BUILDER_DATA_SUFFIX } from "@/lib/builder";
 import { StockIcon } from "./StockIcon";
 import confetti from "canvas-confetti";
 import {
@@ -266,6 +267,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
       abi: STONK_GIFT_ABI,
       functionName: "claimGift",
       args: [BigInt(giftId)],
+      dataSuffix: BUILDER_DATA_SUFFIX,
     });
   };
 
@@ -276,6 +278,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
         abi: STONK_GIFT_ABI,
         functionName: "cancelGift",
         args: [BigInt(giftId)],
+        dataSuffix: BUILDER_DATA_SUFFIX,
       });
     }
   };
@@ -287,6 +290,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
         abi: STONK_GIFT_ABI,
         functionName: "reclaimUnclaimedGift",
         args: [BigInt(giftId)],
+        dataSuffix: BUILDER_DATA_SUFFIX,
       });
     }
   };

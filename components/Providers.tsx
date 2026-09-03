@@ -10,6 +10,7 @@ import "@rainbow-me/rainbowkit/styles.css";
 import { WagmiProvider, http } from "wagmi";
 import { base } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BUILDER_DATA_SUFFIX } from "@/lib/builder";
 
 const config = getDefaultConfig({
   appName: "StonkGift",
@@ -18,6 +19,7 @@ const config = getDefaultConfig({
   transports: {
     [base.id]: http(),
   },
+  dataSuffix: BUILDER_DATA_SUFFIX,
   ssr: true,
 });
 

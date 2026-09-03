@@ -12,6 +12,7 @@ import { parseUnits, formatUnits, isAddress } from "viem";
 import { SUPPORTED_STOCKS, TokenizedStock, DEFAULT_STOCK } from "@/lib/tokens";
 import { STONK_GIFT_ABI, ERC20_ABI } from "@/lib/abi";
 import { getStonkGiftAddress } from "@/lib/contract";
+import { BUILDER_DATA_SUFFIX } from "@/lib/builder";
 import { StockIcon } from "./StockIcon";
 import { GiftSuccessModal } from "./GiftSuccessModal";
 import confetti from "canvas-confetti";
@@ -220,6 +221,7 @@ export function CreateGift() {
       abi: ERC20_ABI,
       functionName: "approve",
       args: [contractAddress, parsedAmount],
+      dataSuffix: BUILDER_DATA_SUFFIX,
     });
   };
 
@@ -230,6 +232,7 @@ export function CreateGift() {
       abi: STONK_GIFT_ABI,
       functionName: "setSupportedToken",
       args: [tokenAddress, true],
+      dataSuffix: BUILDER_DATA_SUFFIX,
     });
   };
 
@@ -252,6 +255,7 @@ export function CreateGift() {
       abi: STONK_GIFT_ABI,
       functionName: "createGift",
       args: [tokenAddress, parsedAmount, recipient as `0x${string}`, unlockTimestamp, message],
+      dataSuffix: BUILDER_DATA_SUFFIX,
     });
   };
 
