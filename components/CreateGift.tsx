@@ -307,7 +307,7 @@ export function CreateGift() {
         <div className="space-y-6">
           {/* Stock Selection */}
           <div>
-            <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2.5">
+            <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
               <span>Select Stock</span>
               <span className="text-[11px] font-normal normal-case text-zinc-500">Coinbase Equities</span>
             </div>
@@ -319,24 +319,27 @@ export function CreateGift() {
                     key={stock.symbol}
                     type="button"
                     onClick={() => setSelectedStock(stock)}
-                    className={`p-3 rounded-2xl border text-left flex flex-col transition-all duration-150 ${
+                    className={`py-2 px-2.5 rounded-xl border flex items-center gap-2 transition-all duration-150 ${
                       isSelected
-                        ? "bg-blue-600/15 border-blue-500 shadow-md shadow-blue-600/10"
+                        ? "bg-blue-600/20 border-blue-500 shadow-sm ring-1 ring-blue-500/40"
                         : "bg-zinc-900/60 border-zinc-800/80 hover:bg-zinc-900 hover:border-zinc-700"
                     }`}
                   >
-                    <div className="mb-2">
-                      <StockIcon symbol={stock.symbol} size={28} />
+                    <StockIcon symbol={stock.symbol} size={22} />
+                    <div className="text-left min-w-0 flex-1">
+                      <span className={`block font-bold text-xs tracking-tight ${isSelected ? "text-white" : "text-zinc-300"}`}>
+                        {stock.symbol}
+                      </span>
+                      <span className="block text-[10px] text-zinc-500 truncate leading-tight">
+                        {stock.name}
+                      </span>
                     </div>
-                    <span className="font-bold text-sm text-white tracking-tight">{stock.symbol}</span>
-                    <span className="text-[11px] text-zinc-400 truncate">{stock.name}</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Amount Input */}
           {/* Amount Input */}
           <div>
             <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
