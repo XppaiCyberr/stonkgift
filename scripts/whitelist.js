@@ -10,19 +10,37 @@ const COINBASE_STOCKS = [
 ];
 
 async function main() {
-  const [signer] = await ethers.getSigners();
+  const signers = await ethers.getSigners();
+  let signer;
+
+  if (signers.length > 0) {
+    signer = signers[0];
+  } else if (process.env.PRIVATE_KEY) {
+    const provider = new ethers.JsonRpcProvider(process.env.BASE_RPC_URL || "https://mainnet.base.org");
+    signer = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+  } else {
+    console.error("\n=======================================================");
+    console.error("Error: No deployer/owner wallet found.");
+    console.error("Please add your owner private key to .env:");
+    console.error("  PRIVATE_KEY=your_private_key_here");
+    console.error("  BASE_RPC_URL=https://mainnet.base.org");
+    console.error("=======================================================\n");
+    process.exit(1);
+  }
+
   console.log("Running whitelist script with caller:", signer.address);
 
   const StonkGift = await ethers.getContractFactory("contracts/StonkGift.sol:StonkGift");
-  const stonkGift = StonkGift.attach(STONKGIFT_ADDRESS);
+  const stonkGift = StonkGift.attach(STONKGIFT_ADDRESS).connect(signer);
 
   const owner = await stonkGift.owner();
   console.log("StonkGift Contract:", STONKGIFT_ADDRESS);
-  console.log("StonkGift Owner:", owner);
+  console.log("StonkGift Owner:   ", owner);
 
   if (signer.address.toLowerCase() !== owner.toLowerCase()) {
-    console.error(`\nError: Caller ${signer.address} is NOT the contract owner (${owner})!`);
-    console.error("Please configure the private key of the owner account in your .env file.");
+    console.error(`\n[REVERT PREVENTED]: Caller ${signer.address} is NOT the contract owner (${owner})!`);
+    console.error("The function 'setSupportedToken' is protected by 'onlyOwner' and will revert with OwnableUnauthorizedAccount.");
+    console.error(`Please use the private key for account: ${owner}`);
     process.exit(1);
   }
 
@@ -32,9 +50,9 @@ async function main() {
     if (isSupported) {
       console.log(`- ${stock.name} is already whitelisted.`);
     } else {
-      console.log(`Setting supported token for ${stock.name} (${stock.address})...`);
+      console.log(`Sending whitelist tx for ${stock.name} (${stock.address})...`);
       const tx = await stonkGift.setSupportedToken(stock.address, true);
-      console.log(`Tx sent: ${tx.hash}. Waiting confirmation...`);
+      console.log(`Tx broadcast: ${tx.hash}. Waiting confirmation...`);
       await tx.wait();
       console.log(`✓ Successfully whitelisted ${stock.name}!`);
     }

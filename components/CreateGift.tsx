@@ -22,6 +22,7 @@ import {
   Copy,
   Sparkles,
   ArrowRight,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -68,12 +69,23 @@ export function CreateGift() {
   });
 
   // Check if selected stock is whitelisted on StonkGift contract
-  const { data: isTokenWhitelisted } = useReadContract({
+  const { data: isTokenWhitelisted, refetch: refetchWhitelist } = useReadContract({
     address: contractAddress,
     abi: STONK_GIFT_ABI,
     functionName: "supportedTokens",
     args: [tokenAddress],
   });
+
+  // Read Contract Owner
+  const { data: contractOwner } = useReadContract({
+    address: contractAddress,
+    abi: STONK_GIFT_ABI,
+    functionName: "owner",
+  });
+
+  const isOwner = Boolean(
+    address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase()
+  );
 
   const parsedAmount = (() => {
     try {
@@ -87,6 +99,9 @@ export function CreateGift() {
   const tokenBalanceFormatted = rawBalance !== undefined
     ? Number(formatUnits(rawBalance, selectedStock.decimals)).toFixed(4)
     : "0.00";
+
+  const isContractConfigured =
+    contractAddress && contractAddress !== "0x0000000000000000000000000000000000000000";
 
   const needsApproval =
     rawAllowance !== undefined &&
@@ -120,12 +135,30 @@ export function CreateGift() {
     hash: createGiftTxHash,
   });
 
-  // Refresh data on approvals
+  // Whitelist Transaction (for Contract Owner)
+  const {
+    data: whitelistTxHash,
+    isPending: isWhitelistPending,
+    writeContract: writeWhitelist,
+  } = useWriteContract();
+
+  const { isLoading: isWhitelistConfirming, isSuccess: isWhitelistSuccess } =
+    useWaitForTransactionReceipt({
+      hash: whitelistTxHash,
+    });
+
+  // Refresh data on approvals or whitelist
   useEffect(() => {
     if (isApproveSuccess) {
       refetchAllowance();
     }
   }, [isApproveSuccess, refetchAllowance]);
+
+  useEffect(() => {
+    if (isWhitelistSuccess) {
+      refetchWhitelist();
+    }
+  }, [isWhitelistSuccess, refetchWhitelist]);
 
   // Handle gift created receipt to extract Gift ID from logs
   useEffect(() => {
@@ -164,9 +197,6 @@ export function CreateGift() {
     setUnlockDateTime(d.toISOString().slice(0, 16));
   };
 
-  const isContractConfigured =
-    contractAddress && contractAddress !== "0x0000000000000000000000000000000000000000";
-
   const handleApprove = () => {
     if (!tokenAddress || !isContractConfigured || parsedAmount <= BigInt(0)) return;
     writeApprove({
@@ -174,6 +204,16 @@ export function CreateGift() {
       abi: ERC20_ABI,
       functionName: "approve",
       args: [contractAddress, maxUint256],
+    });
+  };
+
+  const handleWhitelistStock = () => {
+    if (!tokenAddress || !isContractConfigured || !isOwner) return;
+    writeWhitelist({
+      address: contractAddress,
+      abi: STONK_GIFT_ABI,
+      functionName: "setSupportedToken",
+      args: [tokenAddress, true],
     });
   };
 
@@ -484,17 +524,56 @@ export function CreateGift() {
 
           {/* Action Buttons */}
           <div className="pt-2 space-y-3">
+            {/* Whitelist Banner & Action */}
             {isContractConfigured && isTokenWhitelisted === false && (
-              <div className="p-3.5 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-center space-y-1">
-                <p className="text-xs font-semibold text-yellow-300 flex items-center justify-center gap-1.5">
-                  <AlertCircle className="w-4 h-4 text-yellow-400" />
-                  {selectedStock.symbol} Not Whitelisted Onchain Yet
-                </p>
-                <p className="text-[11px] text-gray-300">
-                  The contract owner must whitelist this token on the StonkGift contract before gifts can be created.
-                </p>
-              </div>
+              isOwner ? (
+                <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/30 text-center space-y-2.5">
+                  <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-blue-300">
+                    <ShieldCheck className="w-4 h-4 text-blue-400" />
+                    <span>Contract Owner Action Required</span>
+                  </div>
+                  <p className="text-xs text-gray-300">
+                    You are connected as the contract owner. Whitelist {selectedStock.name} ({selectedStock.symbol}) so users can create gifts with it.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleWhitelistStock}
+                    disabled={isWhitelistPending || isWhitelistConfirming}
+                    className="w-full py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 disabled:opacity-50"
+                  >
+                    {isWhitelistPending || isWhitelistConfirming ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        Whitelisting {selectedStock.symbol} on Base...
+                      </>
+                    ) : (
+                      <>
+                        <ShieldCheck className="w-4 h-4" />
+                        Whitelist {selectedStock.symbol} On-Chain Now
+                      </>
+                    )}
+                  </button>
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-2 text-left">
+                  <div className="flex items-center gap-1.5 font-semibold text-amber-300">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-400" />
+                    <span>{selectedStock.symbol} Not Whitelisted On-Chain Yet</span>
+                  </div>
+                  <p className="text-gray-300 text-xs leading-relaxed">
+                    The function <code className="bg-black/40 px-1 py-0.5 rounded text-amber-200">setSupportedToken</code> requires the contract owner. Calling it from any other wallet reverts with <code className="text-red-300">OwnableUnauthorizedAccount</code>.
+                  </p>
+                  <div className="p-2.5 bg-black/40 rounded-lg space-y-1 font-mono text-[11px] text-gray-300">
+                    <div>Contract Owner: <span className="text-amber-300 break-all">{contractOwner || "Loading..."}</span></div>
+                    <div>Connected Wallet: <span className="text-white break-all">{address || "Not connected"}</span></div>
+                  </div>
+                  <p className="text-[11px] text-amber-300/90 font-medium">
+                    👉 Switch to the contract owner account in your wallet to whitelist this stock with 1 click.
+                  </p>
+                </div>
+              )
             )}
+
             {!isContractConfigured ? (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-1.5">
                 <p className="text-sm font-semibold text-amber-300 flex items-center justify-center gap-1.5">
@@ -502,7 +581,7 @@ export function CreateGift() {
                   StonkGift Contract Not Deployed on Base Mainnet
                 </p>
                 <p className="text-xs text-gray-300">
-                  Please deploy the StonkGift contract to Base and set its address in <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">lib/contract.ts</code>. You cannot approve the zero address.
+                  Please deploy the StonkGift contract to Base and set its address in <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">lib/contract.ts</code>.
                 </p>
               </div>
             ) : !isConnected ? (

@@ -13,6 +13,13 @@ export const STONK_GIFT_ABI = [
   },
   {
     "type": "function",
+    "name": "owner",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "address", "internalType": "address" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
     "name": "supportedTokens",
     "inputs": [{ "name": "", "type": "address", "internalType": "address" }],
     "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
