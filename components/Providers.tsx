@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const config = getDefaultConfig({
   appName: "StonkGift",
-  projectId: "c18a221f0ceec93e7be7d478bf11e4bf", // WalletConnect Project ID
+  projectId: "609c3f719017e2f84355ce230448a9f5",
   chains: [base],
   transports: {
     [base.id]: http(),
