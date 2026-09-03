@@ -22,7 +22,7 @@ describe("StonkGift Contract", function () {
     await mockNvda.waitForDeployment();
 
     // Deploy StonkGift
-    const StonkGift = await ethers.getContractFactory("StonkGift");
+    const StonkGift = await ethers.getContractFactory("contracts/StonkGift.sol:StonkGift");
     stonkGift = await StonkGift.deploy();
     await stonkGift.waitForDeployment();
 
@@ -356,6 +356,106 @@ describe("StonkGift Contract", function () {
       const gift = await stonkGift.getGift(giftId);
       expect(gift.claimed).to.be.true;
       expect(await stonkGift.isClaimable(giftId)).to.be.false;
+    });
+
+    it("Reclaiming a NO_LOCK gift reverts with NoLockSet", async function () {
+      await expect(
+        stonkGift.connect(sender).reclaimUnclaimedGift(giftId)
+      ).to.be.revertedWithCustomError(stonkGift, "NoLockSet");
+    });
+  });
+
+  describe("Security Enhancements & Grace Period Reclaim", function () {
+    it("Reverts if message exceeds MAX_MESSAGE_LENGTH (500 bytes)", async function () {
+      const now = await time.latest();
+      const longMessage = "a".repeat(501);
+
+      await expect(
+        stonkGift.connect(sender).createGift(
+          await mockNvda.getAddress(),
+          GIFT_AMOUNT,
+          recipient.address,
+          now + 3600,
+          longMessage
+        )
+      ).to.be.revertedWithCustomError(stonkGift, "MessageTooLong");
+    });
+
+    it("Sender cannot reclaim before unlockTime + 180 days", async function () {
+      const now = await time.latest();
+      const unlockTime = now + 86400; // 1 day from now
+
+      await stonkGift.connect(sender).createGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        recipient.address,
+        unlockTime,
+        "Grace test"
+      );
+      const giftId = 1;
+
+      // Fast forward past unlock, but before 180 days
+      await time.increaseTo(unlockTime + 100);
+
+      expect(await stonkGift.isReclaimable(giftId)).to.be.false;
+      await expect(
+        stonkGift.connect(sender).reclaimUnclaimedGift(giftId)
+      ).to.be.revertedWithCustomError(stonkGift, "ReclaimTooEarly");
+    });
+
+    it("Recipient cannot claim after 180 days grace period has passed", async function () {
+      const now = await time.latest();
+      const unlockTime = now + 86400;
+
+      await stonkGift.connect(sender).createGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        recipient.address,
+        unlockTime,
+        "Expired claim test"
+      );
+      const giftId = 1;
+
+      // Advance time past unlockTime + 180 days
+      const gracePeriod = 180 * 24 * 3600;
+      await time.increaseTo(unlockTime + gracePeriod + 1);
+
+      await expect(
+        stonkGift.connect(recipient).claimGift(giftId)
+      ).to.be.revertedWithCustomError(stonkGift, "ClaimPeriodOver");
+    });
+
+    it("Sender can reclaim unclaimed gift after 180 days grace period", async function () {
+      const now = await time.latest();
+      const unlockTime = now + 86400;
+
+      await stonkGift.connect(sender).createGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        recipient.address,
+        unlockTime,
+        "Successful reclaim test"
+      );
+      const giftId = 1;
+
+      const gracePeriod = 180 * 24 * 3600;
+      await time.increaseTo(unlockTime + gracePeriod + 10);
+
+      expect(await stonkGift.isReclaimable(giftId)).to.be.true;
+
+      const senderBalBefore = await mockNvda.balanceOf(sender.address);
+
+      await expect(stonkGift.connect(sender).reclaimUnclaimedGift(giftId))
+        .to.emit(stonkGift, "GiftReclaimed")
+        .withArgs(giftId, sender.address);
+
+      expect(await mockNvda.balanceOf(sender.address)).to.equal(
+        senderBalBefore + GIFT_AMOUNT
+      );
+
+      const gift = await stonkGift.getGift(giftId);
+      expect(gift.cancelled).to.be.true;
+      expect(await stonkGift.isReclaimable(giftId)).to.be.false;
     });
   });
 });

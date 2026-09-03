@@ -93,6 +93,41 @@ export const STONK_GIFT_ABI = [
     "stateMutability": "view"
   },
   {
+    "type": "function",
+    "name": "isReclaimable",
+    "inputs": [{ "name": "giftId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [{ "name": "", "type": "bool", "internalType": "bool" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "reclaimUnclaimedGift",
+    "inputs": [{ "name": "giftId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "RECLAIM_GRACE_PERIOD",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MAX_MESSAGE_LENGTH",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "NO_LOCK",
+    "inputs": [],
+    "outputs": [{ "name": "", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "view"
+  },
+  {
     "type": "event",
     "name": "GiftCreated",
     "inputs": [
@@ -118,6 +153,15 @@ export const STONK_GIFT_ABI = [
   {
     "type": "event",
     "name": "GiftCancelled",
+    "inputs": [
+      { "name": "giftId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "sender", "type": "address", "indexed": true, "internalType": "address" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GiftReclaimed",
     "inputs": [
       { "name": "giftId", "type": "uint256", "indexed": true, "internalType": "uint256" },
       { "name": "sender", "type": "address", "indexed": true, "internalType": "address" }

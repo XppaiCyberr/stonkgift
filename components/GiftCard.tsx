@@ -19,8 +19,6 @@ import {
   CheckCircle,
   XCircle,
   Clock,
-  User,
-  ArrowRight,
   ExternalLink,
   Gift,
   ShieldCheck,
@@ -28,6 +26,7 @@ import {
   Copy,
   Check,
   Sparkles,
+  RotateCcw,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -86,9 +85,21 @@ export function GiftCard({ giftId }: GiftCardProps) {
       hash: cancelTxHash,
     });
 
+  // Reclaim Unclaimed Gift Transaction (post 180-day grace period)
+  const {
+    data: reclaimTxHash,
+    isPending: isReclaimPending,
+    writeContract: writeReclaim,
+  } = useWriteContract();
+
+  const { isLoading: isReclaimConfirming, isSuccess: isReclaimSuccess } =
+    useWaitForTransactionReceipt({
+      hash: reclaimTxHash,
+    });
+
   // Refresh on transaction completion
   useEffect(() => {
-    if (isClaimSuccess || isCancelSuccess) {
+    if (isClaimSuccess || isCancelSuccess || isReclaimSuccess) {
       refetchGift();
       if (isClaimSuccess) {
         confetti({
@@ -98,7 +109,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
         });
       }
     }
-  }, [isClaimSuccess, isCancelSuccess, refetchGift]);
+  }, [isClaimSuccess, isCancelSuccess, isReclaimSuccess, refetchGift]);
 
   // Countdown timer calculation
   useEffect(() => {
@@ -181,7 +192,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
     ) || {
       name: "Tokenized Stock",
       symbol: "NVDAc",
-      decimals: 18,
+      decimals: 8,
       logo: "🟩",
       color: "#76B900",
       address: token as `0x${string}`,
@@ -192,6 +203,10 @@ export function GiftCard({ giftId }: GiftCardProps) {
   const unlockDate = new Date(Number(unlockTime) * 1000);
   const isSender = address && address.toLowerCase() === sender.toLowerCase();
   const isRecipient = address && address.toLowerCase() === recipient.toLowerCase();
+
+  // 180 days grace period: 180 * 86400 = 15,552,000 seconds
+  const isGracePeriodOver =
+    !isInstantGift && Math.floor(Date.now() / 1000) >= Number(unlockTime) + 180 * 86400;
 
   // Status computation
   let statusBadge = {
@@ -208,9 +223,15 @@ export function GiftCard({ giftId }: GiftCardProps) {
     };
   } else if (cancelled) {
     statusBadge = {
-      label: "Cancelled",
+      label: "Cancelled / Reclaimed",
       color: "bg-red-500/10 text-red-400 border-red-500/30",
       icon: XCircle,
+    };
+  } else if (isGracePeriodOver) {
+    statusBadge = {
+      label: "Claim Expired",
+      color: "bg-orange-500/10 text-orange-400 border-orange-500/30",
+      icon: AlertTriangle,
     };
   } else if (isInstantGift) {
     statusBadge = {
@@ -226,8 +247,17 @@ export function GiftCard({ giftId }: GiftCardProps) {
     };
   }
 
-  const canClaim = !claimed && !cancelled && (isInstantGift || timeLeft.isPast) && isRecipient;
-  const canCancel = !claimed && !cancelled && !isInstantGift && !timeLeft.isPast && isSender;
+  const canClaim =
+    !claimed &&
+    !cancelled &&
+    (isInstantGift || (timeLeft.isPast && !isGracePeriodOver)) &&
+    isRecipient;
+
+  const canCancel =
+    !claimed && !cancelled && !isInstantGift && !timeLeft.isPast && isSender;
+
+  const canReclaim =
+    !claimed && !cancelled && !isInstantGift && isGracePeriodOver && isSender;
 
   const handleClaim = () => {
     writeClaim({
@@ -244,6 +274,17 @@ export function GiftCard({ giftId }: GiftCardProps) {
         address: contractAddress,
         abi: STONK_GIFT_ABI,
         functionName: "cancelGift",
+        args: [BigInt(giftId)],
+      });
+    }
+  };
+
+  const handleReclaim = () => {
+    if (confirm("The 180-day grace period has passed. Reclaim this unclaimed gift back to your wallet?")) {
+      writeReclaim({
+        address: contractAddress,
+        abi: STONK_GIFT_ABI,
+        functionName: "reclaimUnclaimedGift",
         args: [BigInt(giftId)],
       });
     }
@@ -288,7 +329,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
           <span>{formattedAmount}</span>
           <span className="text-blue-400">{stockMeta.symbol}</span>
         </div>
-        <p className="text-xs text-gray-400 mt-1">Tokenized equity custodied onchain</p>
+        <p className="text-xs text-gray-400 mt-1">Coinbase tokenized equity on Base</p>
       </div>
 
       {/* Personal Message */}
@@ -314,7 +355,20 @@ export function GiftCard({ giftId }: GiftCardProps) {
         </div>
       )}
 
-      {/* Countdown Timer (if locked) */}
+      {/* Expired Claim Window Banner */}
+      {!claimed && !cancelled && isGracePeriodOver && (
+        <div className="mb-6 p-4 rounded-xl bg-orange-500/10 border border-orange-500/30 text-center">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-orange-400 uppercase tracking-wider mb-1">
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>Claim Window Expired (180-Day Grace Period Ended)</span>
+          </div>
+          <p className="text-xs text-gray-300">
+            This gift was not claimed within 180 days after unlock. The original sender can now safely reclaim the tokens.
+          </p>
+        </div>
+      )}
+
+      {/* Countdown Timer (if locked and not expired) */}
       {!claimed && !cancelled && !isInstantGift && !timeLeft.isPast && (
         <div className="mb-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
           <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">
@@ -393,6 +447,13 @@ export function GiftCard({ giftId }: GiftCardProps) {
             {isInstantGift ? "Immediate (No Lock)" : `${unlockDate.toLocaleDateString()} at ${unlockDate.toLocaleTimeString()}`}
           </span>
         </div>
+
+        {!isInstantGift && (
+          <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900/50 border border-gray-800/60 text-xs">
+            <span className="text-gray-400">Reclaim Grace Period</span>
+            <span className="text-gray-300">180 days post-unlock</span>
+          </div>
+        )}
       </div>
 
       {/* Actions */}
@@ -437,10 +498,34 @@ export function GiftCard({ giftId }: GiftCardProps) {
           </button>
         )}
 
+        {canReclaim && (
+          <button
+            onClick={handleReclaim}
+            disabled={isReclaimPending || isReclaimConfirming}
+            className="w-full py-3.5 px-4 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 text-orange-400 border border-orange-500/30 font-medium text-sm transition flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            {isReclaimPending || isReclaimConfirming ? (
+              <>
+                <div className="w-4 h-4 border-2 border-orange-400 border-t-transparent rounded-full animate-spin" />
+                Reclaiming Unclaimed Gift...
+              </>
+            ) : (
+              <>
+                <RotateCcw className="w-4 h-4" />
+                Reclaim Unclaimed Gift (Grace Period Over)
+              </>
+            )}
+          </button>
+        )}
+
         {/* Helpful status hints */}
         {!claimed && !cancelled && !isRecipient && !isSender && (
           <div className="p-3.5 rounded-xl bg-gray-900/80 border border-gray-800 text-center text-xs text-gray-400">
-            {isInstantGift || timeLeft.isPast ? (
+            {isGracePeriodOver ? (
+              <span>
+                The 180-day claim period has ended. The sender can now reclaim these tokens.
+              </span>
+            ) : isInstantGift || timeLeft.isPast ? (
               <span>
                 This gift is claimable by recipient <span className="font-mono text-gray-300">{recipient.slice(0, 6)}...{recipient.slice(-4)}</span>. Connect with that wallet to claim.
               </span>
@@ -449,6 +534,12 @@ export function GiftCard({ giftId }: GiftCardProps) {
                 This gift unlocks on <span className="text-gray-300">{unlockDate.toLocaleDateString()}</span> for recipient <span className="font-mono text-gray-300">{recipient.slice(0, 6)}...{recipient.slice(-4)}</span>.
               </span>
             )}
+          </div>
+        )}
+
+        {isRecipient && isGracePeriodOver && !claimed && !cancelled && (
+          <div className="p-3.5 rounded-xl bg-orange-500/10 border border-orange-500/20 text-center text-xs text-orange-300">
+            The 180-day claim window has expired. The original sender is now eligible to reclaim this gift.
           </div>
         )}
 
@@ -468,7 +559,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
         {cancelled && (
           <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-center text-xs text-red-300 flex items-center justify-center gap-2">
             <XCircle className="w-4 h-4" />
-            This gift was cancelled by the sender before unlock and refunded.
+            This gift was cancelled / reclaimed by the sender and refunded.
           </div>
         )}
       </div>

@@ -5,7 +5,7 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /**
  * @title MockStockToken
- * @notice Mock tokenized stock (e.g. NVDA, AAPL) for local testing and Base testnet demo.
+ * @notice Mock tokenized stock for local unit testing.
  */
 contract MockStockToken is ERC20 {
     uint8 private _decimals;
@@ -26,9 +26,6 @@ contract MockStockToken is ERC20 {
         return _decimals;
     }
 
-    /**
-     * @notice Free mint/faucet for testing.
-     */
     function faucet(address to, uint256 amount) external {
         _mint(to, amount);
     }

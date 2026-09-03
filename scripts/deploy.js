@@ -13,7 +13,7 @@ async function main() {
   console.log("Target Network:", network.name);
 
   // Deploy StonkGift
-  const StonkGift = await ethers.getContractFactory("StonkGift");
+  const StonkGift = await ethers.getContractFactory("contracts/StonkGift.sol:StonkGift");
   const stonkGift = await StonkGift.deploy();
   await stonkGift.waitForDeployment();
   const stonkGiftAddress = await stonkGift.getAddress();

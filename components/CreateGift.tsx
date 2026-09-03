@@ -67,6 +67,14 @@ export function CreateGift() {
     args: address ? [address, contractAddress] : undefined,
   });
 
+  // Check if selected stock is whitelisted on StonkGift contract
+  const { data: isTokenWhitelisted } = useReadContract({
+    address: contractAddress,
+    abi: STONK_GIFT_ABI,
+    functionName: "supportedTokens",
+    args: [tokenAddress],
+  });
+
   const parsedAmount = (() => {
     try {
       if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return BigInt(0);
@@ -204,6 +212,8 @@ export function CreateGift() {
 
   const canSubmit =
     isConnected &&
+    Boolean(isContractConfigured) &&
+    isTokenWhitelisted !== false &&
     parsedAmount > BigInt(0) &&
     isValidRecipient &&
     unlockValid &&
@@ -464,8 +474,8 @@ export function CreateGift() {
             </label>
             <textarea
               rows={2}
-              maxLength={200}
-              placeholder="Add a congratulatory note, birthday wish, or investment advice..."
+              maxLength={500}
+              placeholder="Add a congratulatory note, birthday wish, or investment advice... (max 500 chars)"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
               className="w-full bg-gray-900/90 text-white text-sm px-4 py-3 rounded-xl border border-gray-800 focus:outline-none focus:border-blue-500 transition resize-none"
@@ -473,7 +483,18 @@ export function CreateGift() {
           </div>
 
           {/* Action Buttons */}
-          <div className="pt-2">
+          <div className="pt-2 space-y-3">
+            {isContractConfigured && isTokenWhitelisted === false && (
+              <div className="p-3.5 rounded-xl bg-yellow-500/10 border border-yellow-500/30 text-center space-y-1">
+                <p className="text-xs font-semibold text-yellow-300 flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-yellow-400" />
+                  {selectedStock.symbol} Not Whitelisted Onchain Yet
+                </p>
+                <p className="text-[11px] text-gray-300">
+                  The contract owner must whitelist this token on the StonkGift contract before gifts can be created.
+                </p>
+              </div>
+            )}
             {!isContractConfigured ? (
               <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-1.5">
                 <p className="text-sm font-semibold text-amber-300 flex items-center justify-center gap-1.5">

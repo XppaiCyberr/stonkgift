@@ -10,10 +10,26 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
  * @title StonkGift
  * @notice Time-locked tokenized stock gift protocol on Base.
  * Senders lock whitelisted stock tokens for a recipient with an unlock timestamp.
- * Recipients claim once unlocked. Senders can cancel before unlock.
+ * Recipients claim once unlocked. Senders can cancel before unlock, or reclaim
+ * an unclaimed gift after a grace period has passed post-unlock.
  */
 contract StonkGift is Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
+
+    /// @dev Sentinel value for `unlockTime` meaning "no lock — claimable immediately".
+    /// Gifts created with NO_LOCK can never be cancelled or reclaimed by the sender,
+    /// since there is no lock period to measure a grace window from. Front ends
+    /// integrating this contract should treat 0 as an explicit, deliberate choice,
+    /// not a default/unset value.
+    uint256 public constant NO_LOCK = 0;
+
+    /// @dev How long after unlockTime a still-unclaimed gift can be reclaimed by
+    /// its original sender. Protects against permanently stuck funds if a
+    /// recipient loses access or the address was mistyped.
+    uint256 public constant RECLAIM_GRACE_PERIOD = 180 days;
+
+    /// @dev Cap on the on-chain gift message to bound storage growth.
+    uint256 public constant MAX_MESSAGE_LENGTH = 500;
 
     struct Gift {
         address sender;
@@ -51,6 +67,11 @@ contract StonkGift is Ownable, ReentrancyGuard {
         address indexed sender
     );
 
+    event GiftReclaimed(
+        uint256 indexed giftId,
+        address indexed sender
+    );
+
     event TokenSupportUpdated(
         address indexed token,
         bool supported
@@ -60,13 +81,18 @@ contract StonkGift is Ownable, ReentrancyGuard {
     error InvalidRecipient();
     error InvalidAmount();
     error InvalidUnlockTime();
+    error MessageTooLong();
+    error AmountMismatch(uint256 expected, uint256 received);
     error GiftDoesNotExist();
     error NotRecipient();
     error NotSender();
     error LockPeriodNotOver();
+    error ClaimPeriodOver();
     error LockPeriodOver();
     error AlreadyClaimed();
     error AlreadyCancelled();
+    error NoLockSet();
+    error ReclaimTooEarly();
 
     constructor() Ownable(msg.sender) {}
 
@@ -85,8 +111,9 @@ contract StonkGift is Ownable, ReentrancyGuard {
      * @param token Address of the tokenized stock ERC-20.
      * @param amount Amount of tokens to gift.
      * @param recipient Address of the gift receiver.
-     * @param unlockTime Unix timestamp when the gift unlocks.
-     * @param message Personal message attached to the gift.
+     * @param unlockTime Unix timestamp when the gift unlocks, or NO_LOCK (0) for
+     * an immediately-claimable, non-cancellable gift.
+     * @param message Personal message attached to the gift (max MAX_MESSAGE_LENGTH bytes).
      */
     function createGift(
         address token,
@@ -98,7 +125,17 @@ contract StonkGift is Ownable, ReentrancyGuard {
         if (!supportedTokens[token]) revert UnsupportedToken(token);
         if (recipient == address(0)) revert InvalidRecipient();
         if (amount == 0) revert InvalidAmount();
-        if (unlockTime != 0 && unlockTime <= block.timestamp) revert InvalidUnlockTime();
+        if (unlockTime != NO_LOCK && unlockTime <= block.timestamp) revert InvalidUnlockTime();
+        if (bytes(message).length > MAX_MESSAGE_LENGTH) revert MessageTooLong();
+
+        // Measure actual tokens received rather than trusting `amount`, so
+        // fee-on-transfer / deflationary / rebasing tokens can't create a
+        // shortfall that later bricks an unrelated gift's claim against the
+        // contract's pooled balance of that token.
+        uint256 balBefore = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;
+        if (received != amount) revert AmountMismatch(amount, received);
 
         giftId = nextGiftId++;
 
@@ -112,8 +149,6 @@ contract StonkGift is Ownable, ReentrancyGuard {
             cancelled: false,
             message: message
         });
-
-        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
         emit GiftCreated(
             giftId,
@@ -134,7 +169,10 @@ contract StonkGift is Ownable, ReentrancyGuard {
         Gift storage gift = gifts[giftId];
         if (gift.sender == address(0)) revert GiftDoesNotExist();
         if (msg.sender != gift.recipient) revert NotRecipient();
-        if (gift.unlockTime != 0 && block.timestamp < gift.unlockTime) revert LockPeriodNotOver();
+        if (gift.unlockTime != NO_LOCK) {
+            if (block.timestamp < gift.unlockTime) revert LockPeriodNotOver();
+            if (block.timestamp >= gift.unlockTime + RECLAIM_GRACE_PERIOD) revert ClaimPeriodOver();
+        }
         if (gift.claimed) revert AlreadyClaimed();
         if (gift.cancelled) revert AlreadyCancelled();
 
@@ -153,7 +191,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
         Gift storage gift = gifts[giftId];
         if (gift.sender == address(0)) revert GiftDoesNotExist();
         if (msg.sender != gift.sender) revert NotSender();
-        if (gift.unlockTime == 0 || block.timestamp >= gift.unlockTime) revert LockPeriodOver();
+        if (gift.unlockTime == NO_LOCK || block.timestamp >= gift.unlockTime) revert LockPeriodOver();
         if (gift.claimed) revert AlreadyClaimed();
         if (gift.cancelled) revert AlreadyCancelled();
 
@@ -162,6 +200,29 @@ contract StonkGift is Ownable, ReentrancyGuard {
         IERC20(gift.token).safeTransfer(gift.sender, gift.amount);
 
         emit GiftCancelled(giftId, msg.sender);
+    }
+
+    /**
+     * @notice Reclaim a gift that unlocked but was never claimed, once the grace
+     * period has elapsed. Prevents funds from being stuck forever if a recipient
+     * loses access to their wallet or was mistyped. Not available for NO_LOCK
+     * gifts, since there is no unlock timestamp to measure the grace period from.
+     * @param giftId ID of the gift.
+     */
+    function reclaimUnclaimedGift(uint256 giftId) external nonReentrant {
+        Gift storage gift = gifts[giftId];
+        if (gift.sender == address(0)) revert GiftDoesNotExist();
+        if (msg.sender != gift.sender) revert NotSender();
+        if (gift.claimed) revert AlreadyClaimed();
+        if (gift.cancelled) revert AlreadyCancelled();
+        if (gift.unlockTime == NO_LOCK) revert NoLockSet();
+        if (block.timestamp < gift.unlockTime + RECLAIM_GRACE_PERIOD) revert ReclaimTooEarly();
+
+        gift.cancelled = true;
+
+        IERC20(gift.token).safeTransfer(gift.sender, gift.amount);
+
+        emit GiftReclaimed(giftId, msg.sender);
     }
 
     /**
@@ -182,7 +243,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
             gift.sender != address(0) &&
             !gift.claimed &&
             !gift.cancelled &&
-            (gift.unlockTime == 0 || block.timestamp >= gift.unlockTime)
+            (gift.unlockTime == NO_LOCK || block.timestamp >= gift.unlockTime)
         );
     }
 
@@ -195,8 +256,23 @@ contract StonkGift is Ownable, ReentrancyGuard {
             gift.sender != address(0) &&
             !gift.claimed &&
             !gift.cancelled &&
-            gift.unlockTime != 0 &&
+            gift.unlockTime != NO_LOCK &&
             block.timestamp < gift.unlockTime
+        );
+    }
+
+    /**
+     * @notice Check if an unclaimed, locked gift is currently eligible for
+     * reclaim by the sender (i.e. the grace period after unlock has passed).
+     */
+    function isReclaimable(uint256 giftId) external view returns (bool) {
+        Gift memory gift = gifts[giftId];
+        return (
+            gift.sender != address(0) &&
+            !gift.claimed &&
+            !gift.cancelled &&
+            gift.unlockTime != NO_LOCK &&
+            block.timestamp >= gift.unlockTime + RECLAIM_GRACE_PERIOD
         );
     }
 }
