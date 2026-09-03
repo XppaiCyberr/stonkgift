@@ -1,0 +1,50 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.pnp
+.pnp.js
+
+# Next.js & Build Output
+.next/
+out/
+build/
+dist/
+*.tsbuildinfo
+
+# Smart Contract Artifacts (Hardhat & Foundry)
+cache/
+artifacts/
+typechain/
+typechain-types/
+broadcast/
+
+# Environment Variables & Secrets (NEVER COMMIT)
+.env
+.env*.local
+.envrc
+*.pem
+
+# Testing & Coverage
+coverage/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE & OS
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.sublime-workspace
+.history/
+
+# Vercel
+.vercel/
+
+# Local Plan & Specs
+buildplan.md
