@@ -8,7 +8,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
-import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
+import { parseUnits, formatUnits, isAddress } from "viem";
 import { SUPPORTED_STOCKS, TokenizedStock, DEFAULT_STOCK } from "@/lib/tokens";
 import { STONK_GIFT_ABI, ERC20_ABI } from "@/lib/abi";
 import { getStonkGiftAddress } from "@/lib/contract";
@@ -203,7 +203,7 @@ export function CreateGift() {
       address: tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [contractAddress, maxUint256],
+      args: [contractAddress, parsedAmount],
     });
   };
 
@@ -603,7 +603,7 @@ export function CreateGift() {
                 ) : (
                   <>
                     <CheckCircle2 className="w-4 h-4" />
-                    Step 1: Approve {selectedStock.symbol}
+                    Step 1: Approve {amount} {selectedStock.symbol}
                   </>
                 )}
               </button>
