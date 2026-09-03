@@ -7,6 +7,7 @@ interface StockIconProps {
   symbol: string;
   className?: string;
   size?: number;
+  priority?: boolean;
 }
 
 const STOCK_IMAGE_MAP: Record<string, string> = {
@@ -21,7 +22,7 @@ const STOCK_IMAGE_MAP: Record<string, string> = {
   METAC: "/meta_200x200.webp",
 };
 
-export function StockIcon({ symbol, className = "", size = 28 }: StockIconProps) {
+export function StockIcon({ symbol, className = "", size = 28, priority = true }: StockIconProps) {
   const normalizedSymbol = symbol ? symbol.toUpperCase() : "";
   const imageSrc = STOCK_IMAGE_MAP[normalizedSymbol] || STOCK_IMAGE_MAP[normalizedSymbol.replace(/C$/, "")];
 
@@ -36,6 +37,7 @@ export function StockIcon({ symbol, className = "", size = 28 }: StockIconProps)
           alt={symbol}
           width={size}
           height={size}
+          priority={priority}
           className="object-cover w-full h-full p-0.5"
         />
       </div>

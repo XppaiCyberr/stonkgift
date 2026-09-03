@@ -15,6 +15,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className="dark">
+      <head>
+        <link rel="preconnect" href="https://mainnet.base.org" crossOrigin="anonymous" />
+        <link rel="dns-prefetch" href="https://mainnet.base.org" />
+      </head>
       <body className="antialiased selection:bg-blue-600 selection:text-white">
         <Providers>
           <div className="flex flex-col min-h-screen">
@@ -22,7 +26,7 @@ export default function RootLayout({
             <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-8 sm:py-12">
               {children}
             </main>
-            <footer className="border-t border-gray-800/80 py-6 text-center text-xs text-gray-400">
+            <footer className="border-t border-zinc-800/80 py-6 text-center text-xs text-zinc-500">
               <p>StonkGift — Programmable Tokenized Stock Gifts on Base</p>
             </footer>
           </div>
