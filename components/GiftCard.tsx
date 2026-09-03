@@ -177,15 +177,14 @@ export function GiftCard({ giftId }: GiftCardProps) {
   // Identify token metadata
   const stockMeta =
     SUPPORTED_STOCKS.find(
-      (s) =>
-        s.addresses.base.toLowerCase() === token.toLowerCase() ||
-        s.addresses.baseSepolia.toLowerCase() === token.toLowerCase()
+      (s) => s.address.toLowerCase() === token.toLowerCase()
     ) || {
       name: "Tokenized Stock",
-      symbol: "NVDA",
+      symbol: "NVDAc",
       decimals: 18,
       logo: "🟩",
       color: "#76B900",
+      address: token as `0x${string}`,
     };
 
   const formattedAmount = formatUnits(amount, stockMeta.decimals);

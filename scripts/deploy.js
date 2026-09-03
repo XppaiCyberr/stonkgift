@@ -1,32 +1,34 @@
-const { ethers } = require("hardhat");
+const { ethers, network } = require("hardhat");
+
+const COINBASE_STOCKS = [
+  { name: "AAPLc (Apple)", address: "0xb200000000000000000000C2e324d24d7eEcd1fb" },
+  { name: "GOOGLc (Google)", address: "0xb2000000000000000000002D0BA3164cc74f58B7" },
+  { name: "METAc (Meta)", address: "0xb2000000000000000000008bC8786B856E61707C" },
+  { name: "NVDAc (Nvidia)", address: "0xb20000000000000000000078ee7ce2fE4908108C" },
+];
 
 async function main() {
   const [deployer] = await ethers.getSigners();
-  console.log("Deploying contracts with account:", deployer.address);
+  console.log("Deploying StonkGift with account:", deployer.address);
+  console.log("Target Network:", network.name);
 
-  // 1. Deploy Mock NVDA stock token
-  const MockStock = await ethers.getContractFactory("MockStockToken");
-  const initialSupply = ethers.parseUnits("100000", 18);
-  const mockNvda = await MockStock.deploy("Tokenized NVIDIA", "NVDA", 18, initialSupply);
-  await mockNvda.waitForDeployment();
-  const mockNvdaAddress = await mockNvda.getAddress();
-  console.log("Mock NVDA deployed to:", mockNvdaAddress);
-
-  // 2. Deploy StonkGift
+  // Deploy StonkGift
   const StonkGift = await ethers.getContractFactory("StonkGift");
   const stonkGift = await StonkGift.deploy();
   await stonkGift.waitForDeployment();
   const stonkGiftAddress = await stonkGift.getAddress();
   console.log("StonkGift deployed to:", stonkGiftAddress);
 
-  // 3. Whitelist Mock NVDA in StonkGift
-  const whitelistTx = await stonkGift.setSupportedToken(mockNvdaAddress, true);
-  await whitelistTx.wait();
-  console.log("Whitelisted Mock NVDA in StonkGift");
+  // Whitelist official Coinbase tokenized stocks
+  console.log("\nWhitelisting official Coinbase tokenized stocks on Base...");
+  for (const stock of COINBASE_STOCKS) {
+    const tx = await stonkGift.setSupportedToken(stock.address, true);
+    await tx.wait();
+    console.log(`✓ Whitelisted ${stock.name}: ${stock.address}`);
+  }
 
-  console.log("\n--- Deployment Summary ---");
-  console.log(`StonkGift: ${stonkGiftAddress}`);
-  console.log(`Mock NVDA: ${mockNvdaAddress}`);
+  console.log("\n--- Deployment Complete ---");
+  console.log(`StonkGift Address: ${stonkGiftAddress}`);
 }
 
 main()

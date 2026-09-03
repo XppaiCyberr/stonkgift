@@ -20,8 +20,6 @@ import {
   CheckCircle2,
   AlertCircle,
   Copy,
-  ExternalLink,
-  Coins,
   Sparkles,
   ArrowRight,
 } from "lucide-react";
@@ -50,11 +48,8 @@ export function CreateGift() {
     setUnlockDateTime(d.toISOString().slice(0, 16));
   }, []);
 
-  // Determine current active token address for selected stock on current network
-  const tokenAddress =
-    chainId === 8453
-      ? selectedStock.addresses.base
-      : selectedStock.addresses.baseSepolia;
+  // Official Coinbase Tokenized Stock contract address on Base Mainnet
+  const tokenAddress = selectedStock.address;
 
   // Read Token Balance
   const { data: rawBalance, refetch: refetchBalance } = useReadContract({
@@ -117,29 +112,12 @@ export function CreateGift() {
     hash: createGiftTxHash,
   });
 
-  // Faucet Transaction (for test stocks)
-  const {
-    data: faucetTxHash,
-    isPending: isFaucetPending,
-    writeContract: writeFaucet,
-  } = useWriteContract();
-
-  const { isSuccess: isFaucetSuccess } = useWaitForTransactionReceipt({
-    hash: faucetTxHash,
-  });
-
-  // Refresh data on approvals or creates
+  // Refresh data on approvals
   useEffect(() => {
     if (isApproveSuccess) {
       refetchAllowance();
     }
   }, [isApproveSuccess, refetchAllowance]);
-
-  useEffect(() => {
-    if (isFaucetSuccess) {
-      refetchBalance();
-    }
-  }, [isFaucetSuccess, refetchBalance]);
 
   // Handle gift created receipt to extract Gift ID from logs
   useEffect(() => {
@@ -210,16 +188,6 @@ export function CreateGift() {
     });
   };
 
-  const handleFaucet = () => {
-    if (!address || !tokenAddress) return;
-    writeFaucet({
-      address: tokenAddress,
-      abi: ERC20_ABI,
-      functionName: "faucet",
-      args: [address, parseUnits("10", selectedStock.decimals)],
-    });
-  };
-
   const copyShareLink = () => {
     if (!createdGiftId) return;
     const url = `${window.location.origin}/gift/${createdGiftId}`;
@@ -250,7 +218,7 @@ export function CreateGift() {
             Gift #{createdGiftId} Created!
           </h2>
           <p className="text-gray-400 text-sm mb-6 max-w-md mx-auto">
-            Your {amount} {selectedStock.symbol} has been deposited into the smart contract and time-locked for{" "}
+            Your {amount} {selectedStock.symbol} has been deposited into the smart contract and {isTimeLocked ? "time-locked" : "gifted"} for{" "}
             <span className="text-gray-200 font-mono">{recipient.slice(0, 6)}...{recipient.slice(-4)}</span>.
           </p>
 
@@ -297,10 +265,10 @@ export function CreateGift() {
               <Gift className="w-5 h-5 text-blue-400" />
               Create StonkGift
             </h1>
-            <p className="text-sm text-gray-400">Lock tokenized stock on Base as a timed gift</p>
+            <p className="text-sm text-gray-400">Lock Coinbase tokenized stocks on Base as a gift</p>
           </div>
           <span className="text-xs px-2.5 py-1 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">
-            Step 1 of 2
+            Base Mainnet
           </span>
         </div>
 
@@ -308,9 +276,9 @@ export function CreateGift() {
           {/* Stock Selection */}
           <div>
             <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              Select Tokenized Stock
+              Select Coinbase Tokenized Stock
             </label>
-            <div className="grid grid-cols-3 gap-2.5">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               {SUPPORTED_STOCKS.map((stock) => {
                 const isSelected = selectedStock.symbol === stock.symbol;
                 return (
@@ -337,20 +305,9 @@ export function CreateGift() {
           <div>
             <div className="flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
               <span>Amount ({selectedStock.symbol})</span>
-              <div className="flex items-center gap-2 normal-case font-normal text-gray-400">
-                <span>Balance: {tokenBalanceFormatted} {selectedStock.symbol}</span>
-                {Number(tokenBalanceFormatted) === 0 && (
-                  <button
-                    type="button"
-                    onClick={handleFaucet}
-                    disabled={isFaucetPending}
-                    className="text-xs text-blue-400 hover:text-blue-300 underline font-medium flex items-center gap-1"
-                  >
-                    <Coins className="w-3 h-3" />
-                    {isFaucetPending ? "Minting..." : "Faucet (+10)"}
-                  </button>
-                )}
-              </div>
+              <span className="normal-case font-normal text-gray-400">
+                Wallet Balance: <strong className="text-gray-200">{tokenBalanceFormatted}</strong> {selectedStock.symbol}
+              </span>
             </div>
             <div className="relative">
               <input
@@ -396,7 +353,7 @@ export function CreateGift() {
             {recipient && !isValidRecipient && (
               <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
                 <AlertCircle className="w-3.5 h-3.5" />
-                Please enter a valid Ethereum / Base address.
+                Please enter a valid Base address.
               </p>
             )}
           </div>
@@ -561,7 +518,7 @@ export function CreateGift() {
 
           {/* Helpful Tip */}
           <p className="text-center text-xs text-gray-400">
-            🔒 Tokens are custodied by the verified StonkGift smart contract. You can cancel and reclaim them anytime before the unlock date.
+            🔒 Tokens are custodied by the verified StonkGift smart contract on Base. You can cancel and reclaim them anytime before the unlock date.
           </p>
         </div>
       </div>
