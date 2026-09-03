@@ -98,7 +98,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
         if (!supportedTokens[token]) revert UnsupportedToken(token);
         if (recipient == address(0)) revert InvalidRecipient();
         if (amount == 0) revert InvalidAmount();
-        if (unlockTime <= block.timestamp) revert InvalidUnlockTime();
+        if (unlockTime != 0 && unlockTime <= block.timestamp) revert InvalidUnlockTime();
 
         giftId = nextGiftId++;
 
@@ -134,7 +134,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
         Gift storage gift = gifts[giftId];
         if (gift.sender == address(0)) revert GiftDoesNotExist();
         if (msg.sender != gift.recipient) revert NotRecipient();
-        if (block.timestamp < gift.unlockTime) revert LockPeriodNotOver();
+        if (gift.unlockTime != 0 && block.timestamp < gift.unlockTime) revert LockPeriodNotOver();
         if (gift.claimed) revert AlreadyClaimed();
         if (gift.cancelled) revert AlreadyCancelled();
 
@@ -153,7 +153,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
         Gift storage gift = gifts[giftId];
         if (gift.sender == address(0)) revert GiftDoesNotExist();
         if (msg.sender != gift.sender) revert NotSender();
-        if (block.timestamp >= gift.unlockTime) revert LockPeriodOver();
+        if (gift.unlockTime == 0 || block.timestamp >= gift.unlockTime) revert LockPeriodOver();
         if (gift.claimed) revert AlreadyClaimed();
         if (gift.cancelled) revert AlreadyCancelled();
 
@@ -182,7 +182,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
             gift.sender != address(0) &&
             !gift.claimed &&
             !gift.cancelled &&
-            block.timestamp >= gift.unlockTime
+            (gift.unlockTime == 0 || block.timestamp >= gift.unlockTime)
         );
     }
 
@@ -195,6 +195,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
             gift.sender != address(0) &&
             !gift.claimed &&
             !gift.cancelled &&
+            gift.unlockTime != 0 &&
             block.timestamp < gift.unlockTime
         );
     }

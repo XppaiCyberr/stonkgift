@@ -313,4 +313,49 @@ describe("StonkGift Contract", function () {
       ).to.be.revertedWithCustomError(stonkGift, "LockPeriodOver");
     });
   });
+
+  describe("Instant / Unlocked Gifts (No Lock Option)", function () {
+    let giftId;
+
+    beforeEach(async function () {
+      // Create gift with unlockTime = 0 (immediately unlocked)
+      const tx = await stonkGift.connect(sender).createGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        recipient.address,
+        0, // unlockTime = 0 means NO LOCK
+        "Instant gift without lock!"
+      );
+      const receipt = await tx.wait();
+      giftId = 1;
+    });
+
+    it("Is immediately claimable upon creation", async function () {
+      expect(await stonkGift.isClaimable(giftId)).to.be.true;
+    });
+
+    it("Is not cancellable by sender", async function () {
+      expect(await stonkGift.isCancellable(giftId)).to.be.false;
+
+      await expect(
+        stonkGift.connect(sender).cancelGift(giftId)
+      ).to.be.revertedWithCustomError(stonkGift, "LockPeriodOver");
+    });
+
+    it("Recipient can claim immediately without waiting for timestamp", async function () {
+      const recipientBalBefore = await mockNvda.balanceOf(recipient.address);
+
+      await expect(stonkGift.connect(recipient).claimGift(giftId))
+        .to.emit(stonkGift, "GiftClaimed")
+        .withArgs(giftId, recipient.address);
+
+      expect(await mockNvda.balanceOf(recipient.address)).to.equal(
+        recipientBalBefore + GIFT_AMOUNT
+      );
+
+      const gift = await stonkGift.getGift(giftId);
+      expect(gift.claimed).to.be.true;
+      expect(await stonkGift.isClaimable(giftId)).to.be.false;
+    });
+  });
 });

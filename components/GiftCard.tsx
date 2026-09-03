@@ -27,6 +27,7 @@ import {
   AlertTriangle,
   Copy,
   Check,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -188,6 +189,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
     };
 
   const formattedAmount = formatUnits(amount, stockMeta.decimals);
+  const isInstantGift = Number(unlockTime) === 0;
   const unlockDate = new Date(Number(unlockTime) * 1000);
   const isSender = address && address.toLowerCase() === sender.toLowerCase();
   const isRecipient = address && address.toLowerCase() === recipient.toLowerCase();
@@ -211,6 +213,12 @@ export function GiftCard({ giftId }: GiftCardProps) {
       color: "bg-red-500/10 text-red-400 border-red-500/30",
       icon: XCircle,
     };
+  } else if (isInstantGift) {
+    statusBadge = {
+      label: "No Lock",
+      color: "bg-green-500/10 text-green-400 border-green-500/30",
+      icon: Sparkles,
+    };
   } else if (timeLeft.isPast) {
     statusBadge = {
       label: "Claimable",
@@ -219,8 +227,8 @@ export function GiftCard({ giftId }: GiftCardProps) {
     };
   }
 
-  const canClaim = !claimed && !cancelled && timeLeft.isPast && isRecipient;
-  const canCancel = !claimed && !cancelled && !timeLeft.isPast && isSender;
+  const canClaim = !claimed && !cancelled && (isInstantGift || timeLeft.isPast) && isRecipient;
+  const canCancel = !claimed && !cancelled && !isInstantGift && !timeLeft.isPast && isSender;
 
   const handleClaim = () => {
     writeClaim({
@@ -294,8 +302,21 @@ export function GiftCard({ giftId }: GiftCardProps) {
         </div>
       )}
 
+      {/* Instant Gift Banner (when no lock) */}
+      {!claimed && !cancelled && isInstantGift && (
+        <div className="mb-6 p-4 rounded-xl bg-green-500/10 border border-green-500/20 text-center">
+          <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-green-400 uppercase tracking-wider mb-1">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Instant Gift (No Lock)</span>
+          </div>
+          <p className="text-xs text-gray-300">
+            This gift has no time lock and can be claimed immediately by the recipient.
+          </p>
+        </div>
+      )}
+
       {/* Countdown Timer (if locked) */}
-      {!claimed && !cancelled && !timeLeft.isPast && (
+      {!claimed && !cancelled && !isInstantGift && !timeLeft.isPast && (
         <div className="mb-6 p-4 rounded-xl bg-amber-500/5 border border-amber-500/20 text-center">
           <div className="flex items-center justify-center gap-1.5 text-xs font-semibold text-amber-400 uppercase tracking-wider mb-3">
             <Clock className="w-3.5 h-3.5" />
@@ -366,6 +387,13 @@ export function GiftCard({ giftId }: GiftCardProps) {
             </button>
           </div>
         </div>
+
+        <div className="flex items-center justify-between p-3 rounded-xl bg-gray-900/50 border border-gray-800/60">
+          <span className="text-xs text-gray-400">Unlock Schedule</span>
+          <span className="font-mono text-gray-200 text-xs">
+            {isInstantGift ? "Immediate (No Lock)" : `${unlockDate.toLocaleDateString()} at ${unlockDate.toLocaleTimeString()}`}
+          </span>
+        </div>
       </div>
 
       {/* Actions */}
@@ -413,7 +441,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
         {/* Helpful status hints */}
         {!claimed && !cancelled && !isRecipient && !isSender && (
           <div className="p-3.5 rounded-xl bg-gray-900/80 border border-gray-800 text-center text-xs text-gray-400">
-            {timeLeft.isPast ? (
+            {isInstantGift || timeLeft.isPast ? (
               <span>
                 This gift is claimable by recipient <span className="font-mono text-gray-300">{recipient.slice(0, 6)}...{recipient.slice(-4)}</span>. Connect with that wallet to claim.
               </span>
@@ -422,6 +450,12 @@ export function GiftCard({ giftId }: GiftCardProps) {
                 This gift unlocks on <span className="text-gray-300">{unlockDate.toLocaleDateString()}</span> for recipient <span className="font-mono text-gray-300">{recipient.slice(0, 6)}...{recipient.slice(-4)}</span>.
               </span>
             )}
+          </div>
+        )}
+
+        {isSender && isInstantGift && !claimed && (
+          <div className="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center text-xs text-blue-300">
+            You sent this as an instant gift. It is immediately claimable by the recipient and cannot be cancelled.
           </div>
         )}
 

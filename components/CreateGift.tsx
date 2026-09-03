@@ -37,6 +37,7 @@ export function CreateGift() {
   const [amount, setAmount] = useState<string>("0.05"); // Default 0.05 from buildplan
   const [recipient, setRecipient] = useState<string>("");
   const [unlockDateTime, setUnlockDateTime] = useState<string>("");
+  const [isTimeLocked, setIsTimeLocked] = useState<boolean>(true);
   const [message, setMessage] = useState<string>("A gift for the future! 🚀");
   const [createdGiftId, setCreatedGiftId] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
@@ -190,10 +191,13 @@ export function CreateGift() {
   const handleCreateGift = () => {
     if (!tokenAddress || parsedAmount <= BigInt(0) || !isAddress(recipient)) return;
 
-    const unlockTimestamp = BigInt(Math.floor(new Date(unlockDateTime).getTime() / 1000));
+    const unlockTimestamp = isTimeLocked
+      ? BigInt(Math.floor(new Date(unlockDateTime).getTime() / 1000))
+      : BigInt(0);
+
     const nowTimestamp = BigInt(Math.floor(Date.now() / 1000));
 
-    if (unlockTimestamp <= nowTimestamp) {
+    if (isTimeLocked && unlockTimestamp <= nowTimestamp) {
       alert("Unlock time must be in the future!");
       return;
     }
@@ -225,15 +229,13 @@ export function CreateGift() {
   };
 
   const isValidRecipient = recipient.length > 0 && isAddress(recipient);
-  const unlockInFuture = unlockDateTime
-    ? new Date(unlockDateTime).getTime() > Date.now()
-    : false;
+  const unlockValid = !isTimeLocked || (unlockDateTime ? new Date(unlockDateTime).getTime() > Date.now() : false);
 
   const canSubmit =
     isConnected &&
     parsedAmount > BigInt(0) &&
     isValidRecipient &&
-    unlockInFuture &&
+    unlockValid &&
     !needsApproval;
 
   return (
@@ -399,52 +401,100 @@ export function CreateGift() {
             )}
           </div>
 
-          {/* Unlock Date & Time */}
+          {/* Gift Lock Type Option */}
           <div>
-            <div className="flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
-              <span>Unlock Date & Time</span>
-              <span className="text-xs font-normal normal-case text-gray-400">Recipient cannot claim before this</span>
-            </div>
-            <div className="relative mb-2">
-              <input
-                type="datetime-local"
-                value={unlockDateTime}
-                onChange={(e) => setUnlockDateTime(e.target.value)}
-                className="w-full bg-gray-900/90 text-white px-4 py-3 rounded-xl border border-gray-800 focus:outline-none focus:border-blue-500 transition text-sm"
-              />
-            </div>
-            {/* Quick date presets */}
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="text-xs text-gray-400 mr-1">Presets:</span>
+            <label className="block text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
+              Gift Lock Type
+            </label>
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <button
                 type="button"
-                onClick={() => applyTimePreset(1)}
-                className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                onClick={() => setIsTimeLocked(true)}
+                className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition ${
+                  isTimeLocked
+                    ? "bg-blue-600/10 border-blue-500 text-white ring-1 ring-blue-500"
+                    : "bg-gray-900/60 border-gray-800 text-gray-400 hover:border-gray-700"
+                }`}
               >
-                +1 Day
+                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-sm block text-gray-200">Time-Locked</span>
+                  <span className="text-[11px] text-gray-400 block">Unlocks on date</span>
+                </div>
               </button>
+
               <button
                 type="button"
-                onClick={() => applyTimePreset(7)}
-                className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                onClick={() => setIsTimeLocked(false)}
+                className={`p-3 rounded-xl border text-left flex items-center gap-2.5 transition ${
+                  !isTimeLocked
+                    ? "bg-green-600/10 border-green-500 text-white ring-1 ring-green-500"
+                    : "bg-gray-900/60 border-gray-800 text-gray-400 hover:border-gray-700"
+                }`}
               >
-                +1 Week
-              </button>
-              <button
-                type="button"
-                onClick={() => applyTimePreset(30)}
-                className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
-              >
-                +1 Month
-              </button>
-              <button
-                type="button"
-                onClick={() => applyTimePreset(365)}
-                className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
-              >
-                +1 Year
+                <div className="w-8 h-8 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-bold text-sm block text-gray-200">No Lock</span>
+                  <span className="text-[11px] text-gray-400 block">Instant unlock</span>
+                </div>
               </button>
             </div>
+
+            {/* Unlock Date & Time (only when time-locked) */}
+            {isTimeLocked ? (
+              <div className="p-3.5 rounded-xl bg-gray-900/50 border border-gray-800/80 space-y-2">
+                <div className="flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider mb-1">
+                  <span>Unlock Date & Time</span>
+                  <span className="text-xs font-normal normal-case text-gray-400">Recipient cannot claim before this</span>
+                </div>
+                <input
+                  type="datetime-local"
+                  value={unlockDateTime}
+                  onChange={(e) => setUnlockDateTime(e.target.value)}
+                  className="w-full bg-gray-900/90 text-white px-4 py-2.5 rounded-xl border border-gray-800 focus:outline-none focus:border-blue-500 transition text-sm"
+                />
+                <div className="flex items-center gap-1.5 flex-wrap pt-1">
+                  <span className="text-xs text-gray-400 mr-1">Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => applyTimePreset(1)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                  >
+                    +1 Day
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyTimePreset(7)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                  >
+                    +1 Week
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyTimePreset(30)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                  >
+                    +1 Month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyTimePreset(365)}
+                    className="text-xs px-2.5 py-1 rounded-md bg-gray-800/80 hover:bg-gray-700 text-gray-300 transition"
+                  >
+                    +1 Year
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-3.5 rounded-xl bg-green-500/10 border border-green-500/20 text-xs text-green-300 flex items-center gap-2.5">
+                <Sparkles className="w-4 h-4 text-green-400 flex-shrink-0" />
+                <span>Instant Gift: The recipient can claim this tokenized stock immediately upon receiving the gift link.</span>
+              </div>
+            )}
           </div>
 
           {/* Personal Gift Message */}
