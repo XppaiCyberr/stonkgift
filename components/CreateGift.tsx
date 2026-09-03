@@ -8,7 +8,7 @@ import {
   useWriteContract,
   useWaitForTransactionReceipt,
 } from "wagmi";
-import { parseUnits, formatUnits, isAddress } from "viem";
+import { parseUnits, formatUnits, isAddress, maxUint256 } from "viem";
 import { SUPPORTED_STOCKS, TokenizedStock, DEFAULT_STOCK } from "@/lib/tokens";
 import { STONK_GIFT_ABI, ERC20_ABI } from "@/lib/abi";
 import { getStonkGiftAddress } from "@/lib/contract";
@@ -156,13 +156,16 @@ export function CreateGift() {
     setUnlockDateTime(d.toISOString().slice(0, 16));
   };
 
+  const isContractConfigured =
+    contractAddress && contractAddress !== "0x0000000000000000000000000000000000000000";
+
   const handleApprove = () => {
-    if (!tokenAddress || parsedAmount <= BigInt(0)) return;
+    if (!tokenAddress || !isContractConfigured || parsedAmount <= BigInt(0)) return;
     writeApprove({
       address: tokenAddress,
       abi: ERC20_ABI,
       functionName: "approve",
-      args: [contractAddress, parseUnits("1000000", selectedStock.decimals)],
+      args: [contractAddress, maxUint256],
     });
   };
 
@@ -471,7 +474,17 @@ export function CreateGift() {
 
           {/* Action Buttons */}
           <div className="pt-2">
-            {!isConnected ? (
+            {!isContractConfigured ? (
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-center space-y-1.5">
+                <p className="text-sm font-semibold text-amber-300 flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-amber-400" />
+                  StonkGift Contract Not Deployed on Base Mainnet
+                </p>
+                <p className="text-xs text-gray-300">
+                  Please deploy the StonkGift contract to Base and set its address in <code className="text-amber-300 bg-black/40 px-1 py-0.5 rounded">lib/contract.ts</code>. You cannot approve the zero address.
+                </p>
+              </div>
+            ) : !isConnected ? (
               <div className="p-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center text-sm text-blue-300">
                 Please connect your wallet on Base to create a gift.
               </div>
