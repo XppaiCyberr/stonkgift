@@ -14,9 +14,6 @@ export function Navbar() {
           </div>
           <div className="flex items-center gap-2">
             <span className="text-white">Stonk<span className="text-blue-500">Gift</span></span>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-300 border border-zinc-700">
-              Base
-            </span>
           </div>
         </Link>
 

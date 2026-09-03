@@ -86,6 +86,20 @@ export function CreateGift() {
     address && contractOwner && address.toLowerCase() === contractOwner.toLowerCase()
   );
 
+  const handleAmountChange = (val: string) => {
+    // Convert comma to dot
+    let sanitized = val.replace(",", ".");
+    // Allow digits and at most one dot
+    if (sanitized === "" || /^[0-9]*\.?[0-9]*$/.test(sanitized)) {
+      // Enforce max token decimals
+      const parts = sanitized.split(".");
+      if (parts[1] && parts[1].length > selectedStock.decimals) {
+        sanitized = `${parts[0]}.${parts[1].slice(0, selectedStock.decimals)}`;
+      }
+      setAmount(sanitized);
+    }
+  };
+
   const parsedAmount = (() => {
     try {
       if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) return BigInt(0);
@@ -99,12 +113,16 @@ export function CreateGift() {
     ? Number(formatUnits(rawBalance, selectedStock.decimals)).toFixed(4)
     : "0.00";
 
+  const isInsufficientBalance =
+    rawBalance !== undefined && parsedAmount > rawBalance;
+
   const isContractConfigured =
     contractAddress && contractAddress !== "0x0000000000000000000000000000000000000000";
 
   const needsApproval =
     rawAllowance !== undefined &&
     parsedAmount > BigInt(0) &&
+    !isInsufficientBalance &&
     rawAllowance < parsedAmount;
 
   // Approve Transaction
@@ -245,6 +263,7 @@ export function CreateGift() {
     Boolean(isContractConfigured) &&
     isTokenWhitelisted !== false &&
     parsedAmount > BigInt(0) &&
+    !isInsufficientBalance &&
     isValidRecipient &&
     unlockValid &&
     !needsApproval;
@@ -318,30 +337,82 @@ export function CreateGift() {
           </div>
 
           {/* Amount Input */}
+          {/* Amount Input */}
           <div>
             <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-              <span>Amount</span>
-              <span className="normal-case font-normal text-xs text-zinc-400">
-                Balance: <strong className="text-white">{tokenBalanceFormatted}</strong> {selectedStock.symbol}
-              </span>
+              <span>Amount ({selectedStock.symbol})</span>
+              <div className="flex items-center gap-1.5 normal-case font-normal text-xs">
+                <span className="text-zinc-500">Balance:</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (rawBalance !== undefined) {
+                      setAmount(formatUnits(rawBalance, selectedStock.decimals));
+                    }
+                  }}
+                  className="text-zinc-200 hover:text-blue-400 font-mono font-medium transition underline-offset-2 hover:underline"
+                  title="Click to use full balance"
+                >
+                  {tokenBalanceFormatted} {selectedStock.symbol}
+                </button>
+              </div>
             </div>
+
             <div className="relative">
               <input
-                type="number"
-                step="0.001"
-                min="0.0001"
+                type="text"
+                inputMode="decimal"
                 placeholder="0.05"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full bg-zinc-900/90 text-white font-mono text-xl pl-4 pr-36 py-3 rounded-2xl border border-zinc-800 focus:outline-none focus:border-blue-500 transition"
+                onChange={(e) => handleAmountChange(e.target.value)}
+                className={`w-full bg-zinc-900/90 text-white font-mono text-xl pl-4 pr-24 py-3 rounded-2xl border transition focus:outline-none ${
+                  isInsufficientBalance
+                    ? "border-red-500/80 focus:border-red-500"
+                    : "border-zinc-800 focus:border-blue-500"
+                }`}
               />
-              <div className="absolute right-2.5 top-2.5 flex items-center gap-1">
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (rawBalance !== undefined) {
+                      setAmount(formatUnits(rawBalance, selectedStock.decimals));
+                    }
+                  }}
+                  className="text-[11px] font-bold px-2 py-1 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 transition"
+                >
+                  MAX
+                </button>
+                <span className="text-xs font-bold text-zinc-300 font-mono">
+                  {selectedStock.symbol}
+                </span>
+              </div>
+            </div>
+
+            {/* Quick Presets & Balance Warning Row */}
+            <div className="flex items-center justify-between mt-2 text-xs">
+              {isInsufficientBalance ? (
+                <span className="text-red-400 flex items-center gap-1 text-xs">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  Exceeds balance ({tokenBalanceFormatted} {selectedStock.symbol})
+                </span>
+              ) : (
+                <span className="text-[11px] text-zinc-500">
+                  Min: 0.0001 {selectedStock.symbol}
+                </span>
+              )}
+
+              <div className="flex items-center gap-1 ml-auto">
                 {["0.01", "0.05", "0.1", "0.5"].map((preset) => (
                   <button
                     key={preset}
                     type="button"
                     onClick={() => setAmount(preset)}
-                    className="text-[11px] px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition font-medium"
+                    className={`text-[11px] px-2 py-0.5 rounded-md transition font-medium ${
+                      amount === preset
+                        ? "bg-blue-600 text-white"
+                        : "bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300"
+                    }`}
                   >
                     {preset}
                   </button>
@@ -526,6 +597,14 @@ export function CreateGift() {
               <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-center text-sm text-blue-300 font-medium">
                 Please connect your wallet to create a StonkGift.
               </div>
+            ) : isInsufficientBalance ? (
+              <button
+                type="button"
+                disabled
+                className="w-full py-3.5 px-4 rounded-2xl bg-zinc-900 text-zinc-500 border border-zinc-800 font-bold text-sm cursor-not-allowed"
+              >
+                Insufficient {selectedStock.symbol} Balance
+              </button>
             ) : needsApproval ? (
               <button
                 type="button"
