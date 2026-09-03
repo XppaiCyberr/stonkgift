@@ -178,8 +178,7 @@ export function GiftCard({ giftId }: GiftCardProps) {
     SUPPORTED_STOCKS.find(
       (s) =>
         s.addresses.base.toLowerCase() === token.toLowerCase() ||
-        s.addresses.baseSepolia.toLowerCase() === token.toLowerCase() ||
-        s.addresses.localhost.toLowerCase() === token.toLowerCase()
+        s.addresses.baseSepolia.toLowerCase() === token.toLowerCase()
     ) || {
       name: "Tokenized Stock",
       symbol: "NVDA",

@@ -53,9 +53,7 @@ export function CreateGift() {
   const tokenAddress =
     chainId === 8453
       ? selectedStock.addresses.base
-      : chainId === 84532
-      ? selectedStock.addresses.baseSepolia
-      : selectedStock.addresses.localhost;
+      : selectedStock.addresses.baseSepolia;
 
   // Read Token Balance
   const { data: rawBalance, refetch: refetchBalance } = useReadContract({

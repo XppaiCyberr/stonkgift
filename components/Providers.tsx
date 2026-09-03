@@ -8,17 +8,16 @@ import {
 } from "@rainbow-me/rainbowkit";
 import "@rainbow-me/rainbowkit/styles.css";
 import { WagmiProvider, http } from "wagmi";
-import { base, baseSepolia, hardhat } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const config = getDefaultConfig({
   appName: "StonkGift",
   projectId: "c18a221f0ceec93e7be7d478bf11e4bf", // public demo projectId for WalletConnect
-  chains: [baseSepolia, base, hardhat],
+  chains: [base, baseSepolia],
   transports: {
     [base.id]: http(),
     [baseSepolia.id]: http(),
-    [hardhat.id]: http("http://127.0.0.1:8545"),
   },
   ssr: true,
 });
