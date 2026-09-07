@@ -5,6 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title StonkGift
@@ -34,6 +36,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
     struct Gift {
         address sender;
         address recipient;
+        address claimSigner;
         address token;
         uint256 amount;
         uint256 unlockTime;
@@ -51,6 +54,16 @@ contract StonkGift is Ownable, ReentrancyGuard {
         uint256 indexed giftId,
         address indexed sender,
         address indexed recipient,
+        address token,
+        uint256 amount,
+        uint256 unlockTime,
+        string message
+    );
+
+    event GiftCreatedWithLink(
+        uint256 indexed giftId,
+        address indexed sender,
+        address indexed claimSigner,
         address token,
         uint256 amount,
         uint256 unlockTime,
@@ -79,12 +92,15 @@ contract StonkGift is Ownable, ReentrancyGuard {
 
     error UnsupportedToken(address token);
     error InvalidRecipient();
+    error InvalidClaimSigner();
     error InvalidAmount();
     error InvalidUnlockTime();
     error MessageTooLong();
     error AmountMismatch(uint256 expected, uint256 received);
     error GiftDoesNotExist();
     error NotRecipient();
+    error NotLinkGift();
+    error InvalidClaimSignature();
     error NotSender();
     error LockPeriodNotOver();
     error ClaimPeriodOver();
@@ -142,6 +158,7 @@ contract StonkGift is Ownable, ReentrancyGuard {
         gifts[giftId] = Gift({
             sender: msg.sender,
             recipient: recipient,
+            claimSigner: address(0),
             token: token,
             amount: amount,
             unlockTime: unlockTime,
@@ -154,6 +171,67 @@ contract StonkGift is Ownable, ReentrancyGuard {
             giftId,
             msg.sender,
             recipient,
+            token,
+            amount,
+            unlockTime,
+            message
+        );
+    }
+
+    /**
+     * @notice Deposit tokens to create a shareable link/QR gift for an unknown recipient.
+     * @param token Address of the tokenized stock ERC-20.
+     * @param amount Amount of tokens to gift.
+     * @param claimSigner Ephemeral public address authorized to sign the claim.
+     * @param unlockTime Unix timestamp when the gift unlocks, or NO_LOCK (0) for immediate.
+     * @param message Personal message attached to the gift (max MAX_MESSAGE_LENGTH bytes).
+     */
+    function createLinkGift(
+        address token,
+        uint256 amount,
+        address claimSigner,
+        uint256 unlockTime,
+        string calldata message
+    ) external nonReentrant returns (uint256 giftId) {
+        if (!supportedTokens[token]) revert UnsupportedToken(token);
+        if (claimSigner == address(0)) revert InvalidClaimSigner();
+        if (amount == 0) revert InvalidAmount();
+        if (unlockTime != NO_LOCK && unlockTime <= block.timestamp) revert InvalidUnlockTime();
+        if (bytes(message).length > MAX_MESSAGE_LENGTH) revert MessageTooLong();
+
+        uint256 balBefore = IERC20(token).balanceOf(address(this));
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        uint256 received = IERC20(token).balanceOf(address(this)) - balBefore;
+        if (received != amount) revert AmountMismatch(amount, received);
+
+        giftId = nextGiftId++;
+
+        gifts[giftId] = Gift({
+            sender: msg.sender,
+            recipient: address(0),
+            claimSigner: claimSigner,
+            token: token,
+            amount: amount,
+            unlockTime: unlockTime,
+            claimed: false,
+            cancelled: false,
+            message: message
+        });
+
+        emit GiftCreated(
+            giftId,
+            msg.sender,
+            address(0),
+            token,
+            amount,
+            unlockTime,
+            message
+        );
+
+        emit GiftCreatedWithLink(
+            giftId,
+            msg.sender,
+            claimSigner,
             token,
             amount,
             unlockTime,
@@ -179,6 +257,37 @@ contract StonkGift is Ownable, ReentrancyGuard {
         gift.claimed = true;
 
         IERC20(gift.token).safeTransfer(gift.recipient, gift.amount);
+
+        emit GiftClaimed(giftId, msg.sender);
+    }
+
+    /**
+     * @notice Claim a link gift using a signature produced by the ephemeral private key.
+     * @dev Frontrunning-immune: the signature binds explicitly to (giftId, msg.sender, block.chainid).
+     * @param giftId ID of the gift.
+     * @param signature ECDSA signature over keccak256(abi.encodePacked(giftId, msg.sender, block.chainid)).
+     */
+    function claimGiftWithSignature(uint256 giftId, bytes calldata signature) external nonReentrant {
+        Gift storage gift = gifts[giftId];
+        if (gift.sender == address(0)) revert GiftDoesNotExist();
+        if (gift.claimSigner == address(0)) revert NotLinkGift();
+        if (gift.unlockTime != NO_LOCK) {
+            if (block.timestamp < gift.unlockTime) revert LockPeriodNotOver();
+            if (block.timestamp >= gift.unlockTime + RECLAIM_GRACE_PERIOD) revert ClaimPeriodOver();
+        }
+        if (gift.claimed) revert AlreadyClaimed();
+        if (gift.cancelled) revert AlreadyCancelled();
+
+        bytes32 messageHash = keccak256(abi.encodePacked(giftId, msg.sender, block.chainid));
+        bytes32 ethSignedMessageHash = MessageHashUtils.toEthSignedMessageHash(messageHash);
+        address recoveredSigner = ECDSA.recover(ethSignedMessageHash, signature);
+
+        if (recoveredSigner != gift.claimSigner) revert InvalidClaimSignature();
+
+        gift.claimed = true;
+        gift.recipient = msg.sender;
+
+        IERC20(gift.token).safeTransfer(msg.sender, gift.amount);
 
         emit GiftClaimed(giftId, msg.sender);
     }

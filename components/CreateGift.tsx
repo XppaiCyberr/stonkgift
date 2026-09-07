@@ -15,6 +15,8 @@ import { getStonkGiftAddress } from "@/lib/contract";
 import { BUILDER_DATA_SUFFIX } from "@/lib/builder";
 import { StockIcon } from "./StockIcon";
 import { GiftSuccessModal } from "./GiftSuccessModal";
+import { ShareGiftModal } from "./ShareGiftModal";
+import { generatePrivateKey, privateKeyToAccount } from "viem/accounts";
 import confetti from "canvas-confetti";
 import {
   Gift,
@@ -25,12 +27,23 @@ import {
   Sparkles,
   ShieldCheck,
   Lock,
+  QrCode,
+  Link as LinkIcon,
+  Zap,
 } from "lucide-react";
 
 export function CreateGift() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const contractAddress = getStonkGiftAddress(chainId);
+
+  // Delivery Mode State: 'link' (QR / WhatsApp / Socials) or 'address' (direct 0x address)
+  const [giftMode, setGiftMode] = useState<"link" | "address">("link");
+  const [pendingEphemeralKey, setPendingEphemeralKey] = useState<string | null>(null);
+  const [shareModalData, setShareModalData] = useState<{
+    giftId: string;
+    claimUrl: string;
+  } | null>(null);
 
   // Form State
   const [selectedStock, setSelectedStock] = useState<TokenizedStock>(DEFAULT_STOCK);
@@ -195,7 +208,14 @@ export function CreateGift() {
           id = "1";
         }
       }
-      setCreatedGiftId(id);
+
+      if (giftMode === "link" && pendingEphemeralKey) {
+        const claimUrl = `${window.location.origin}/claim#id=${id}&key=${pendingEphemeralKey}`;
+        setShareModalData({ giftId: id, claimUrl });
+        setPendingEphemeralKey(null);
+      } else {
+        setCreatedGiftId(id);
+      }
 
       // Trigger celebratory confetti
       confetti({
@@ -204,7 +224,7 @@ export function CreateGift() {
         origin: { y: 0.5 },
       });
     }
-  }, [isCreateGiftSuccess, createReceipt, refetchBalance, refetchAllowance]);
+  }, [isCreateGiftSuccess, createReceipt, refetchBalance, refetchAllowance, giftMode, pendingEphemeralKey]);
 
   // Quick unlock presets
   const applyTimePreset = (days: number) => {
@@ -237,7 +257,8 @@ export function CreateGift() {
   };
 
   const handleCreateGift = () => {
-    if (!tokenAddress || parsedAmount <= BigInt(0) || !isAddress(recipient)) return;
+    if (!tokenAddress || parsedAmount <= BigInt(0)) return;
+    if (giftMode === "address" && !isAddress(recipient)) return;
 
     const unlockTimestamp = isTimeLocked
       ? BigInt(Math.floor(new Date(unlockDateTime).getTime() / 1000))
@@ -250,13 +271,28 @@ export function CreateGift() {
       return;
     }
 
-    writeCreateGift({
-      address: contractAddress,
-      abi: STONK_GIFT_ABI,
-      functionName: "createGift",
-      args: [tokenAddress, parsedAmount, recipient as `0x${string}`, unlockTimestamp, message],
-      dataSuffix: BUILDER_DATA_SUFFIX,
-    });
+    if (giftMode === "link") {
+      const privKey = generatePrivateKey();
+      const account = privateKeyToAccount(privKey);
+      const claimSigner = account.address;
+      setPendingEphemeralKey(privKey);
+
+      writeCreateGift({
+        address: contractAddress,
+        abi: STONK_GIFT_ABI,
+        functionName: "createLinkGift",
+        args: [tokenAddress, parsedAmount, claimSigner, unlockTimestamp, message],
+        dataSuffix: BUILDER_DATA_SUFFIX,
+      });
+    } else {
+      writeCreateGift({
+        address: contractAddress,
+        abi: STONK_GIFT_ABI,
+        functionName: "createGift",
+        args: [tokenAddress, parsedAmount, recipient as `0x${string}`, unlockTimestamp, message],
+        dataSuffix: BUILDER_DATA_SUFFIX,
+      });
+    }
   };
 
   const isValidRecipient = recipient.length > 0 && isAddress(recipient);
@@ -268,13 +304,13 @@ export function CreateGift() {
     isTokenWhitelisted !== false &&
     parsedAmount > BigInt(0) &&
     !isInsufficientBalance &&
-    isValidRecipient &&
+    (giftMode === "link" || isValidRecipient) &&
     unlockValid &&
     !needsApproval;
 
   return (
     <div className="w-full max-w-xl mx-auto">
-      {/* Interactive Success Modal / Dialog */}
+      {/* Interactive Success Modal for Direct Gifts */}
       {createdGiftId && (
         <GiftSuccessModal
           giftId={createdGiftId}
@@ -285,6 +321,24 @@ export function CreateGift() {
           unlockDateTime={unlockDateTime}
           onClose={() => {
             setCreatedGiftId(null);
+            setAmount("0.05");
+            setRecipient("");
+          }}
+        />
+      )}
+
+      {/* Share & QR Modal for Link Gifts */}
+      {shareModalData && (
+        <ShareGiftModal
+          isOpen={Boolean(shareModalData)}
+          giftId={shareModalData.giftId}
+          claimUrl={shareModalData.claimUrl}
+          stockSymbol={selectedStock.symbol}
+          stockName={selectedStock.name}
+          amount={amount}
+          message={message}
+          onClose={() => {
+            setShareModalData(null);
             setAmount("0.05");
             setRecipient("");
           }}
@@ -428,29 +482,79 @@ export function CreateGift() {
             </div>
           </div>
 
-          {/* Recipient Address */}
+          {/* Delivery Method Toggle */}
           <div>
-            <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
-              Recipient Address (Base)
-            </label>
-            <input
-              type="text"
-              placeholder="0x..."
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value.trim())}
-              className={`w-full bg-zinc-900/90 text-white font-mono text-sm px-4 py-3 rounded-2xl border transition focus:outline-none ${
-                recipient && !isValidRecipient
-                  ? "border-red-500 focus:border-red-500"
-                  : "border-zinc-800 focus:border-blue-500"
-              }`}
-            />
-            {recipient && !isValidRecipient && (
-              <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
-                <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                Please enter a valid Base Ethereum address.
-              </p>
-            )}
+            <div className="flex items-center justify-between text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+              <span>Delivery Method</span>
+              <span className="text-[11px] font-normal normal-case text-emerald-400 flex items-center gap-1">
+                <Zap className="w-3 h-3 fill-current" />
+                Zero Gas for Recipient
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-2xl bg-zinc-950/80 border border-zinc-800/80">
+              <button
+                type="button"
+                onClick={() => setGiftMode("link")}
+                className={`py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  giftMode === "link"
+                    ? "bg-blue-600/20 text-blue-400 shadow-sm border border-blue-500/40 ring-1 ring-blue-500/20"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <QrCode className="w-3.5 h-3.5" />
+                <span>Share via Link / QR</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setGiftMode("address")}
+                className={`py-2.5 px-3 rounded-xl text-xs font-semibold transition-all flex items-center justify-center gap-2 ${
+                  giftMode === "address"
+                    ? "bg-zinc-800 text-white shadow-sm border border-zinc-700"
+                    : "text-zinc-400 hover:text-white"
+                }`}
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>Direct to 0x Address</span>
+              </button>
+            </div>
           </div>
+
+          {/* Delivery Method Details: Link vs Address */}
+          {giftMode === "link" ? (
+            <div className="p-4 rounded-2xl bg-blue-500/10 border border-blue-500/20 space-y-1.5">
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300">
+                <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                <span>Non-Crypto Friendly (No Wallet Address Needed)</span>
+              </div>
+              <p className="text-xs text-zinc-300 leading-relaxed">
+                A scannable QR code and shareable link (WhatsApp/Telegram) will be generated. The recipient can claim in 5 seconds using Face ID / Passkey with 100% sponsored gas fees.
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className="block text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-2">
+                Recipient Address (Base)
+              </label>
+              <input
+                type="text"
+                placeholder="0x..."
+                value={recipient}
+                onChange={(e) => setRecipient(e.target.value.trim())}
+                className={`w-full bg-zinc-900/90 text-white font-mono text-sm px-4 py-3 rounded-2xl border transition focus:outline-none ${
+                  recipient && !isValidRecipient
+                    ? "border-red-500 focus:border-red-500"
+                    : "border-zinc-800 focus:border-blue-500"
+                }`}
+              />
+              {recipient && !isValidRecipient && (
+                <p className="text-xs text-red-400 mt-1.5 flex items-center gap-1">
+                  <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
+                  Please enter a valid Base Ethereum address.
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Gift Lock Type Segmented Toggle */}
           <div>
@@ -643,10 +747,15 @@ export function CreateGift() {
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     Creating Gift on Base...
                   </>
+                ) : giftMode === "link" ? (
+                  <>
+                    <QrCode className="w-4 h-4" />
+                    Create Shareable Link / QR Gift ({amount} {selectedStock.symbol})
+                  </>
                 ) : (
                   <>
                     <Send className="w-4 h-4" />
-                    Create Gift ({amount} {selectedStock.symbol})
+                    Send Gift ({amount} {selectedStock.symbol})
                   </>
                 )}
               </button>

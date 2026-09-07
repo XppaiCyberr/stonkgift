@@ -458,4 +458,190 @@ describe("StonkGift Contract", function () {
       expect(await stonkGift.isReclaimable(giftId)).to.be.false;
     });
   });
+
+  describe("Link Gifts & Ephemeral Signature Claims (Coinbase Smart Wallet / Gasless Flow)", function () {
+    let ephemeralWallet;
+
+    beforeEach(async function () {
+      ephemeralWallet = ethers.Wallet.createRandom();
+    });
+
+    it("Successfully creates a link gift and emits GiftCreatedWithLink", async function () {
+      const tx = await stonkGift.connect(sender).createLinkGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        ephemeralWallet.address,
+        0, // Instant / NO_LOCK
+        "Here is your stock link gift!"
+      );
+
+      await expect(tx)
+        .to.emit(stonkGift, "GiftCreatedWithLink")
+        .withArgs(
+          1,
+          sender.address,
+          ephemeralWallet.address,
+          await mockNvda.getAddress(),
+          GIFT_AMOUNT,
+          0,
+          "Here is your stock link gift!"
+        );
+
+      const gift = await stonkGift.getGift(1);
+      expect(gift.claimSigner).to.equal(ephemeralWallet.address);
+      expect(gift.recipient).to.equal(ethers.ZeroAddress);
+      expect(gift.claimed).to.be.false;
+    });
+
+    it("Reverts if claimSigner is the zero address", async function () {
+      await expect(
+        stonkGift.connect(sender).createLinkGift(
+          await mockNvda.getAddress(),
+          GIFT_AMOUNT,
+          ethers.ZeroAddress,
+          0,
+          "Zero address signer"
+        )
+      ).to.be.revertedWithCustomError(stonkGift, "InvalidClaimSigner");
+    });
+
+    it("Recipient claims link gift with valid ephemeral signature and receives tokens", async function () {
+      await stonkGift.connect(sender).createLinkGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        ephemeralWallet.address,
+        0,
+        "Gasless link claim test"
+      );
+      const giftId = 1;
+
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      // Ephemeral signature over (giftId, msg.sender, chainId)
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "address", "uint256"],
+        [giftId, recipient.address, chainId]
+      );
+      const signature = await ephemeralWallet.signMessage(ethers.getBytes(messageHash));
+
+      const recipientBalBefore = await mockNvda.balanceOf(recipient.address);
+
+      const claimTx = await stonkGift.connect(recipient).claimGiftWithSignature(giftId, signature);
+
+      await expect(claimTx)
+        .to.emit(stonkGift, "GiftClaimed")
+        .withArgs(giftId, recipient.address);
+
+      expect(await mockNvda.balanceOf(recipient.address)).to.equal(
+        recipientBalBefore + GIFT_AMOUNT
+      );
+
+      const gift = await stonkGift.getGift(giftId);
+      expect(gift.claimed).to.be.true;
+      expect(gift.recipient).to.equal(recipient.address);
+    });
+
+    it("Front-running bot is rejected when attempting to submit with a different recipient", async function () {
+      await stonkGift.connect(sender).createLinkGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        ephemeralWallet.address,
+        0,
+        "Frontrun protection test"
+      );
+      const giftId = 1;
+
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      // Signature was authorized for recipient.address
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "address", "uint256"],
+        [giftId, recipient.address, chainId]
+      );
+      const signature = await ephemeralWallet.signMessage(ethers.getBytes(messageHash));
+
+      // Stranger (MEV bot) tries to execute claimGiftWithSignature with stranger as msg.sender
+      await expect(
+        stonkGift.connect(stranger).claimGiftWithSignature(giftId, signature)
+      ).to.be.revertedWithCustomError(stonkGift, "InvalidClaimSignature");
+    });
+
+    it("Reverts if signature was signed by a different key", async function () {
+      await stonkGift.connect(sender).createLinkGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        ephemeralWallet.address,
+        0,
+        "Wrong key test"
+      );
+      const giftId = 1;
+
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      // Corrupted / wrong signer
+      const impostorWallet = ethers.Wallet.createRandom();
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "address", "uint256"],
+        [giftId, recipient.address, chainId]
+      );
+      const invalidSignature = await impostorWallet.signMessage(ethers.getBytes(messageHash));
+
+      await expect(
+        stonkGift.connect(recipient).claimGiftWithSignature(giftId, invalidSignature)
+      ).to.be.revertedWithCustomError(stonkGift, "InvalidClaimSignature");
+    });
+
+    it("Cannot claim a link gift twice", async function () {
+      await stonkGift.connect(sender).createLinkGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        ephemeralWallet.address,
+        0,
+        "Double claim test"
+      );
+      const giftId = 1;
+
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "address", "uint256"],
+        [giftId, recipient.address, chainId]
+      );
+      const signature = await ephemeralWallet.signMessage(ethers.getBytes(messageHash));
+
+      await stonkGift.connect(recipient).claimGiftWithSignature(giftId, signature);
+
+      await expect(
+        stonkGift.connect(recipient).claimGiftWithSignature(giftId, signature)
+      ).to.be.revertedWithCustomError(stonkGift, "AlreadyClaimed");
+    });
+
+    it("Cannot claim standard direct gift using claimGiftWithSignature", async function () {
+      await stonkGift.connect(sender).createGift(
+        await mockNvda.getAddress(),
+        GIFT_AMOUNT,
+        recipient.address,
+        0,
+        "Direct gift test"
+      );
+      const giftId = 1;
+
+      const network = await ethers.provider.getNetwork();
+      const chainId = network.chainId;
+
+      const messageHash = ethers.solidityPackedKeccak256(
+        ["uint256", "address", "uint256"],
+        [giftId, recipient.address, chainId]
+      );
+      const signature = await ephemeralWallet.signMessage(ethers.getBytes(messageHash));
+
+      await expect(
+        stonkGift.connect(recipient).claimGiftWithSignature(giftId, signature)
+      ).to.be.revertedWithCustomError(stonkGift, "NotLinkGift");
+    });
+  });
 });

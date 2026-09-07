@@ -50,8 +50,31 @@ export const STONK_GIFT_ABI = [
   },
   {
     "type": "function",
+    "name": "createLinkGift",
+    "inputs": [
+      { "name": "token", "type": "address", "internalType": "address" },
+      { "name": "amount", "type": "uint256", "internalType": "uint256" },
+      { "name": "claimSigner", "type": "address", "internalType": "address" },
+      { "name": "unlockTime", "type": "uint256", "internalType": "uint256" },
+      { "name": "message", "type": "string", "internalType": "string" }
+    ],
+    "outputs": [{ "name": "giftId", "type": "uint256", "internalType": "uint256" }],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
     "name": "claimGift",
     "inputs": [{ "name": "giftId", "type": "uint256", "internalType": "uint256" }],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "claimGiftWithSignature",
+    "inputs": [
+      { "name": "giftId", "type": "uint256", "internalType": "uint256" },
+      { "name": "signature", "type": "bytes", "internalType": "bytes" }
+    ],
     "outputs": [],
     "stateMutability": "nonpayable"
   },
@@ -74,6 +97,7 @@ export const STONK_GIFT_ABI = [
         "components": [
           { "name": "sender", "type": "address", "internalType": "address" },
           { "name": "recipient", "type": "address", "internalType": "address" },
+          { "name": "claimSigner", "type": "address", "internalType": "address" },
           { "name": "token", "type": "address", "internalType": "address" },
           { "name": "amount", "type": "uint256", "internalType": "uint256" },
           { "name": "unlockTime", "type": "uint256", "internalType": "uint256" },
@@ -141,6 +165,20 @@ export const STONK_GIFT_ABI = [
       { "name": "giftId", "type": "uint256", "indexed": true, "internalType": "uint256" },
       { "name": "sender", "type": "address", "indexed": true, "internalType": "address" },
       { "name": "recipient", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "token", "type": "address", "indexed": false, "internalType": "address" },
+      { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "unlockTime", "type": "uint256", "indexed": false, "internalType": "uint256" },
+      { "name": "message", "type": "string", "indexed": false, "internalType": "string" }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "GiftCreatedWithLink",
+    "inputs": [
+      { "name": "giftId", "type": "uint256", "indexed": true, "internalType": "uint256" },
+      { "name": "sender", "type": "address", "indexed": true, "internalType": "address" },
+      { "name": "claimSigner", "type": "address", "indexed": true, "internalType": "address" },
       { "name": "token", "type": "address", "indexed": false, "internalType": "address" },
       { "name": "amount", "type": "uint256", "indexed": false, "internalType": "uint256" },
       { "name": "unlockTime", "type": "uint256", "indexed": false, "internalType": "uint256" },
