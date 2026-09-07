@@ -9,7 +9,7 @@ import {
   useWaitForTransactionReceipt,
   useConnect,
 } from "wagmi";
-import { useWriteContracts, useCapabilities } from "wagmi/experimental";
+import { useWriteContracts, useCapabilities, useCallsStatus } from "wagmi/experimental";
 import { formatUnits, encodePacked, keccak256 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { useConnectModal } from "@rainbow-me/rainbowkit";
@@ -30,6 +30,7 @@ import {
   Zap,
   ArrowRight,
   Fingerprint,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -81,11 +82,26 @@ export default function ClaimGiftPage() {
   // Wagmi experimental writeContracts (EIP-5792) for smart wallets & paymaster
   const {
     writeContracts,
-    data: callBundleId,
+    data: writeContractsResult,
     isPending: isWriteContractsPending,
     isSuccess: isWriteContractsSuccess,
     error: writeContractsError,
   } = useWriteContracts();
+
+  const callBundleId =
+    typeof writeContractsResult === "string"
+      ? writeContractsResult
+      : (writeContractsResult as any)?.id;
+
+  // Track status of batch/sponsored calls to extract transactionHash
+  const { data: callsStatus } = useCallsStatus({
+    id: callBundleId as string,
+    query: {
+      enabled: Boolean(callBundleId),
+      refetchInterval: (data) =>
+        data.state.data?.status === "success" ? false : 1000,
+    },
+  });
 
   // Fallback direct writeContract for standard EOAs
   const {
@@ -261,6 +277,19 @@ export default function ClaimGiftPage() {
   const isLocked = !isInstant && Date.now() < Number(unlockTime) * 1000;
   const isPending = isWriteContractsPending || isFallbackPending || isFallbackConfirming || claimStatus === "signing" || claimStatus === "submitting";
 
+  // Extract on-chain transaction hash from either standard tx or smart wallet calls bundle
+  const txHash =
+    fallbackTxHash || (callsStatus?.receipts?.[0]?.transactionHash as `0x${string}` | undefined);
+
+  const explorerBaseUrl =
+    chainId === 84532 ? "https://sepolia.basescan.org" : "https://basescan.org";
+
+  const explorerUrl = txHash
+    ? `${explorerBaseUrl}/tx/${txHash}`
+    : address
+    ? `${explorerBaseUrl}/address/${address}`
+    : `${explorerBaseUrl}/address/${contractAddress}`;
+
   return (
     <div className="w-full max-w-xl mx-auto bg-[#0c1017] border border-zinc-800/80 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
       {/* Top Banner */}
@@ -411,13 +440,23 @@ export default function ClaimGiftPage() {
               <p className="text-xs text-zinc-300">
                 You now own {formattedAmount} of {stockMeta.name} ({stockMeta.symbol}) on Base.
               </p>
-              <Link
-                href="/portfolio"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition"
-              >
-                <span>View in Portfolio</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </Link>
+              <div className="flex flex-col sm:flex-row items-center justify-center gap-2.5 pt-1">
+                <a
+                  href={explorerUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold transition shadow-lg shadow-emerald-600/30"
+                >
+                  <ExternalLink className="w-3.5 h-3.5" />
+                  <span>View Transaction on BaseScan</span>
+                </a>
+                <Link
+                  href="/"
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 hover:text-white text-xs font-semibold transition"
+                >
+                  <span>Create Another Gift</span>
+                </Link>
+              </div>
             </div>
           )}
         </div>
