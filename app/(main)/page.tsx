@@ -1,6 +1,7 @@
 import { CreateGift } from "@/components/CreateGift";
 import { Lock, Sparkles, Shield, Clock, TrendingUp, ArrowUpRight } from "lucide-react";
 import { StockIcon } from "@/components/StockIcon";
+import { SUPPORTED_STOCKS } from "@/lib/tokens";
 
 export default function Home() {
   return (
@@ -19,21 +20,23 @@ export default function Home() {
           Send Coinbase tokenized equities like NVIDIA, Apple, and Google. Lock them until a future date or send as an instant gift.
         </p>
 
-        {/* Supported Stocks Bar */}
-        <div className="flex items-center justify-center gap-4 mt-6">
-          {[
-            { symbol: "NVDAc", name: "Nvidia" },
-            { symbol: "AAPLc", name: "Apple" },
-            { symbol: "GOOGLc", name: "Google" },
-            { symbol: "METAc", name: "Meta" },
-          ].map((stock) => (
-            <div
+        {/* Supported Stocks Bar with Aerodrome DEX Buy Links */}
+        <div className="flex flex-wrap items-center justify-center gap-2.5 mt-6">
+          {SUPPORTED_STOCKS.map((stock) => (
+            <a
               key={stock.symbol}
-              className="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-zinc-900/80 border border-zinc-800/80 text-xs text-zinc-300"
+              href={stock.buyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-xs text-zinc-300 hover:text-white transition group shadow-sm"
+              title={`Buy ${stock.name} (${stock.symbol}) on Aerodrome DEX`}
             >
               <StockIcon symbol={stock.symbol} size={16} />
               <span className="font-semibold">{stock.symbol}</span>
-            </div>
+              <span className="text-[10px] text-zinc-500 group-hover:text-blue-400 flex items-center gap-0.5 ml-0.5">
+                Buy <ArrowUpRight className="w-2.5 h-2.5" />
+              </span>
+            </a>
           ))}
         </div>
       </section>

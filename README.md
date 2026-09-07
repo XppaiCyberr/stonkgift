@@ -26,14 +26,15 @@ StonkGift is built for the **Base Builder Quest (September 2026)**:
 
 ### Supported Coinbase Tokenized Stocks (Base B20 Precompiles)
 
-The protocol whitelists official Coinbase tokenized stock assets on Base Mainnet (8 decimals):
+The protocol whitelists official Coinbase tokenized stock assets on Base Mainnet (8 decimals). Users can acquire these stocks directly via Aerodrome DEX:
 
-| Ticker | Asset Name | Contract Address | Decimals |
-| :--- | :--- | :--- | :--- |
-| NVDAc | NVIDIA Tokenized Stock | `0xb20000000000000000000078ee7ce2fE4908108C` | 8 |
-| AAPLc | Apple Tokenized Stock | `0xb200000000000000000000C2e324d24d7eEcd1fb` | 8 |
-| GOOGLc | Alphabet (Google) Tokenized Stock | `0xb2000000000000000000002D0BA3164cc74f58B7` | 8 |
-| METAc | Meta Tokenized Stock | `0xb2000000000000000000008bC8786B856E61707C` | 8 |
+| Ticker | Asset Name | Contract Address | Decimals | Aerodrome DEX Swap Link |
+| :--- | :--- | :--- | :--- | :--- |
+| NVDAc | NVIDIA Tokenized Stock | `0xb20000000000000000000078ee7ce2fE4908108C` | 8 | [Trade NVDAc on Aerodrome](https://aerodrome.finance/swap?from=eth&to=0xb20000000000000000000078ee7ce2fe4908108c&chain0=8453&chain1=8453) |
+| AAPLc | Apple Tokenized Stock | `0xb200000000000000000000C2e324d24d7eEcd1fb` | 8 | [Trade AAPLc on Aerodrome](https://aerodrome.finance/swap?from=eth&to=0xb200000000000000000000c2e324d24d7eecd1fb&chain0=8453&chain1=8453) |
+| GOOGLc | Alphabet (Google) Tokenized Stock | `0xb2000000000000000000002D0BA3164cc74f58B7` | 8 | [Trade GOOGLc on Aerodrome](https://aerodrome.finance/swap?from=eth&to=0xb2000000000000000000002d0ba3164cc74f58b7&chain0=8453&chain1=8453) |
+| METAc | Meta Tokenized Stock | `0xb2000000000000000000008bC8786B856E61707C` | 8 | [Trade METAc on Aerodrome](https://aerodrome.finance/swap?from=eth&to=0xb2000000000000000000008bc8786b856e61707c&chain0=8453&chain1=8453) |
+
 
 ---
 
@@ -70,6 +71,10 @@ The protocol whitelists official Coinbase tokenized stock assets on Base Mainnet
 - **One-Click Share Buttons:** Direct sharing links for WhatsApp, Telegram, X (Twitter), and iMessage.
 - **Save QR Card:** Downloadable PNG image for physical greeting cards or printables.
 - **Delivery Method Toggle (`components/CreateGift.tsx`):** Easily switch between "Share via Link / QR" (non-crypto friendly) and "Direct to 0x Address".
+
+### 6. Aerodrome DEX Tokenized Stock Acquisition
+- **Direct Swap Links:** Hero stock pills and gift creation amount selectors link directly to official Aerodrome pools on Base (`from=eth&to=<address>&chain0=8453&chain1=8453`).
+- **Insufficient Balance Resolution:** When a sender holds insufficient stock balance, the disabled action converts into a direct "Buy on Aerodrome" button to acquire tokens seamlessly before gifting.
 
 ---
 

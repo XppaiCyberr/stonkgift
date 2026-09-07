@@ -30,6 +30,7 @@ import {
   QrCode,
   Link as LinkIcon,
   Zap,
+  ExternalLink,
 } from "lucide-react";
 
 export function CreateGift() {
@@ -480,6 +481,22 @@ export function CreateGift() {
                 ))}
               </div>
             </div>
+
+            {/* Aerodrome Swap Link */}
+            <div className="mt-2 pt-2 border-t border-zinc-800/40 flex items-center justify-between text-xs">
+              <span className="text-[11px] text-zinc-500">
+                Need {selectedStock.symbol} tokens?
+              </span>
+              <a
+                href={selectedStock.buyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-[11px] font-semibold text-blue-400 hover:text-blue-300 transition group"
+              >
+                <span>Buy {selectedStock.symbol} on Aerodrome</span>
+                <ExternalLink className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+              </a>
+            </div>
           </div>
 
           {/* Delivery Method Toggle */}
@@ -709,13 +726,20 @@ export function CreateGift() {
                 Please connect your wallet to create a StonkGift.
               </div>
             ) : isInsufficientBalance ? (
-              <button
-                type="button"
-                disabled
-                className="w-full py-3.5 px-4 rounded-2xl bg-zinc-900 text-zinc-500 border border-zinc-800 font-bold text-sm cursor-not-allowed"
-              >
-                Insufficient {selectedStock.symbol} Balance
-              </button>
+              <div className="space-y-2">
+                <a
+                  href={selectedStock.buyUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-sm transition flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30"
+                >
+                  <span>Buy {selectedStock.symbol} on Aerodrome</span>
+                  <ExternalLink className="w-4 h-4" />
+                </a>
+                <p className="text-center text-[11px] text-zinc-400">
+                  Swap ETH for {selectedStock.symbol} on Aerodrome DEX, then return here to send your gift.
+                </p>
+              </div>
             ) : needsApproval ? (
               <button
                 type="button"
