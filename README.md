@@ -2,7 +2,7 @@
 
 > Programmable Tokenized Stock Gifting Protocol on Base
 
-StonkGift is an on-chain protocol and decentralized application built on Base Mainnet that enables users to gift Coinbase tokenized equities (such as NVIDIA, Apple, Google, and Meta) with programmable time locks or instant delivery.
+StonkGift is an on-chain protocol and decentralized application built on Base Mainnet that enables users to gift Coinbase tokenized equities (such as NVIDIA, Apple, Google, and Meta) with programmable time locks, instant delivery, or address-agnostic gasless claim links.
 
 ---
 
@@ -21,7 +21,8 @@ StonkGift is built for the **Base Builder Quest (September 2026)**:
 
 | Contract | Address | Explorer |
 | :--- | :--- | :--- |
-| StonkGift Protocol | `0xb804AAaA4702C9Fd31D1Adc04925d45B69537736` | [Basescan](https://basescan.org/address/0xb804AAaA4702C9Fd31D1Adc04925d45B69537736) |
+| StonkGift Protocol (Latest) | `0x5522248Ab918315DDE146dBE9b8346E04F305803` | [Basescan](https://basescan.org/address/0x5522248Ab918315DDE146dBE9b8346E04F305803) |
+| StonkGift Protocol (V1) | `0xb804AAaA4702C9Fd31D1Adc04925d45B69537736` | [Basescan](https://basescan.org/address/0xb804AAaA4702C9Fd31D1Adc04925d45B69537736) |
 
 ### Supported Coinbase Tokenized Stocks (Base B20 Precompiles)
 
@@ -38,37 +39,48 @@ The protocol whitelists official Coinbase tokenized stock assets on Base Mainnet
 
 ## Key Features & Architecture
 
-### Smart Contract (`contracts/StonkGift.sol`)
-- **Non-Custodial Escrow:** Deposited stocks are custodied transparently by the verified protocol contract on Base.
+### 1. Smart Contract (`contracts/StonkGift.sol`)
+- **Non-Custodial Escrow:** Deposited stocks are custodied transparently by verified protocol contracts on Base.
+- **Address-Agnostic Link Gifting (`createLinkGift`):** Senders can deposit equity gifts without knowing the recipient's wallet address in advance. The contract registers a disposable public key (`claimSigner`).
+- **Frontrunning-Immune Claiming (`claimGiftWithSignature`):** Recipients claim via an ephemeral ECDSA signature. The signed message strictly binds `keccak256(giftId, msg.sender, block.chainid)`. Any attempt by an MEV bot or stranger to submit the signature with their own address reverts immediately.
 - **Time-Locked Gifting:** Senders can lock stock gifts until a specified future unix timestamp.
 - **Instant Gifting (`NO_LOCK = 0`):** Option to send immediately claimable gifts without time restrictions.
-- **Sender Cancellation Protection:** Senders can cancel and retrieve their tokens at any point prior to the unlock timestamp. Instant gifts cannot be cancelled.
+- **Sender Cancellation Protection:** Senders can cancel and retrieve their deposited tokens at any point prior to the unlock timestamp. Instant gifts cannot be cancelled.
 - **180-Day Grace Period Reclaim:** If a time-locked gift remains unclaimed 180 days after its unlock timestamp, the original sender can reclaim the tokens, preventing permanently locked funds.
-- **Balance Invariance Verification:** Measures contract balances before and after transfers to guarantee exact custody amounts.
-- **Bound Storage:** Gift messages are strictly capped at 500 bytes to prevent unbounded storage costs.
-- **Owner Token Management:** Owner can whitelist or remove supported equity tokens on-chain.
+- **Balance Invariance Verification:** Measures contract balances before and after transfers to guarantee exact custody amounts received.
+- **Bound Storage:** Gift messages are strictly capped at 500 bytes to prevent unbounded storage growth.
+- **Owner Token Management:** Contract owner can whitelist or remove supported equity tokens on-chain.
 
-### Frontend Application (`components/`)
-- **Modern Next.js 15 Stack:** Powered by Next.js 15.5.25 App Router, Tailwind CSS, RainbowKit 2, Wagmi v2, and Viem.
-- **Interactive Success Dialog:** Interactive modal dialog displays upon gift creation with one-click link copying and celebration effects.
-- **Compact Stock Selector:** Horizontal pill selector designed for minimal vertical footprint on desktop and mobile.
-- **Precise Amount Controls:** Number input sanitization, decimal clamping (8 decimals), one-click MAX button, and live balance verification.
-- **Base Builder Code Attribution:** Integrated with Base Builder Code `bc_1hvd8159` via ERC-8021 data suffixes across all transactions.
+### 2. Coinbase Smart Wallet & Passkey Onboarding
+- **Passkey / Face ID Authentication:** Integrated with Coinbase Smart Wallet via RainbowKit (`coinbaseWallet.preference = 'smartWalletOnly'`). Non-crypto recipients can create a smart account in 5 seconds using biometrics, without seed phrases, passwords, or extension downloads.
+- **Recommended Wallet Section:** Prominently featured in the wallet connection list for zero-friction access.
+
+### 3. Gasless Claiming via Base CDP Paymaster
+- **100% Sponsored Gas:** Recipients pay exactly $0 in gas fees to claim their tokenized stock.
+- **Secure Reverse Proxy (`app/api/paymaster/route.ts`):** Client UserOperations route through a server-side Next.js proxy that keeps Coinbase Developer Platform API keys private and validates requests before forwarding them to the CDP Paymaster.
+- **Fallback Compatibility:** Standard EOA wallets that do not support ERC-7677 can still claim using traditional transaction signing.
+
+### 4. Recipient Landing Page (`app/claim/page.tsx`)
+- **RFC 3986 URL Hash Fragment:** The ephemeral private key lives solely after the `#` fragment (`/claim#id=1&key=0x...`), ensuring it is never transmitted to web servers, reverse proxies, or CDN logs.
+- **Automated Claim Execution:** Computes the authorization signature client-side and triggers a gas-sponsored claim via Coinbase Smart Wallet.
+- **Celebration & Portfolio Redirect:** Confetti animation and direct link to view received equity.
+
+### 5. Sharing UX & QR Generator (`components/ShareGiftModal.tsx`)
+- **High-Resolution QR Codes:** Scannable QR codes generated via `qrcode.react`.
+- **One-Click Share Buttons:** Direct sharing links for WhatsApp, Telegram, X (Twitter), and iMessage.
+- **Save QR Card:** Downloadable PNG image for physical greeting cards or printables.
+- **Delivery Method Toggle (`components/CreateGift.tsx`):** Easily switch between "Share via Link / QR" (non-crypto friendly) and "Direct to 0x Address".
 
 ---
 
-## Upcoming Roadmap: Address-Agnostic Gifting & Web3 Onboarding
+## Application Routes
 
-A primary obstacle to mainstream adoption of tokenized stocks is that senders must know the recipient's wallet address in advance. Most non-crypto users do not yet have an on-chain wallet.
-
-### Ephemeral Keypair Claim Links (Detailed in `ephemeral.md`)
-To solve this, StonkGift is introducing address-agnostic claim links:
-
-1. **Client-Side Key Generation:** The sender generates a disposable cryptographic keypair in their browser.
-2. **On-Chain Commitment:** The smart contract stores only the public address (`claimSigner`).
-3. **Secure Link Sharing:** The private key is embedded solely within the URL hash fragment (`https://stonkgift.com/gift/claim#id=1&key=0x...`). In accordance with web standards, hash fragments are never sent to web servers.
-4. **MEV-Proof Claim Flow:** The recipient opens the link, connects any wallet (or creates one instantly via passkey smart wallets), and the browser signs an authorization payload tying the claim to their specific address (`msg.sender`).
-5. **Educational Impact:** Non-crypto recipients can receive an equity gift via WhatsApp, Telegram, email, or a physical greeting card QR code, creating a seamless first interaction with tokenized assets on Base.
+| Route | Type | Description |
+| :--- | :--- | :--- |
+| `/` | Static | Main dashboard, supported stock chips, protocol explainer, and gift creation form. |
+| `/claim` | Static | Recipient claim page with URL hash credential parsing and gasless passkey claiming. |
+| `/gift/[id]` | Dynamic | Gift inspection page with live countdown timer, status badges, and cancel/reclaim controls. |
+| `/api/paymaster` | Dynamic (API) | Secure server-side proxy route for CDP Paymaster RPC requests. |
 
 ---
 
@@ -80,7 +92,7 @@ Always use `pnpm`:
 # Install dependencies
 pnpm install
 
-# Run smart contract unit tests (25 passing tests)
+# Run smart contract unit tests (32 passing tests)
 pnpm test
 
 # Build production Next.js application
@@ -91,6 +103,24 @@ pnpm start
 
 # Run local development server
 pnpm dev
+```
+
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env.local` to configure local settings:
+
+```bash
+# Coinbase Developer Platform (CDP) Paymaster URL
+# Obtain from https://cdp.coinbase.com -> Onchain Tools -> Paymaster
+CDP_PAYMASTER_URL="https://api.developer.coinbase.com/rpc/v1/base/YOUR_CDP_API_KEY"
+
+# Base RPC URL
+BASE_RPC_URL="https://mainnet.base.org"
+
+# WalletConnect / RainbowKit Project ID
+NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID="609c3f719017e2f84355ce230448a9f5"
 ```
 
 ---
@@ -115,4 +145,5 @@ pnpm exec hardhat run scripts/whitelist.js --network base
 ---
 
 ## License
+
 MIT
